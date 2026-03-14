@@ -1,0 +1,7 @@
+<library path="zyron_control">
+  <class name="zyron_control/ZyronInterface"
+    type="zyron_control::ZyronInterface"
+    base_class_type="hardware_interface::SystemInterface">
+    <description>Zyron Hardware Interface — communicates via ROS2 topics</description>
+  </class>
+</library>
