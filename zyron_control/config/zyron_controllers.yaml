@@ -35,7 +35,7 @@ zyron_controller:
     base_frame_id: base_footprint
 
     publish_limited_velocity: true
-    enable_odom_tf: true
+    enable_odom_tf: false
 
     linear:
       x:
