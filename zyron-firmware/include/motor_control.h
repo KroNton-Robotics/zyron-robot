@@ -23,6 +23,9 @@ unsigned long lastInterruptTimeL = 0;
 float count_per_rev_lm = 228.0; // <======== set this number according to your motor (count per rev) for left motor
 float count_per_rev_rm = 224.0; // <======== set this number according to your motor (count per rev) for right motor
 
+int LM_current_pwm = 0;   // tracks actual applied PWM (ramped)
+int RM_current_pwm = 0;
+constexpr int PWM_RAMP_RATE = 16;  // PWM units per loop tick (~1600 PWM/s at 200 Hz)
 unsigned long lastTime, now;
 
 // LEFT MOTOR
@@ -81,8 +84,8 @@ void motor_loop()
 
   now = millis();
 
-  // Update odometry at ~5 Hz (200 ms)
-  if ((now - lastTime) >= 200)
+  // Update odometry at ~20 Hz (50 ms)
+  if ((now - lastTime) >= 50)
   {
     float dt_s = (now - lastTime) / 1000.0f;
 
@@ -97,9 +100,16 @@ void motor_loop()
     lastTime    = now;
   }
 
-  // Apply direct PWM commands from host
-  motor_left.setSpeed(LM_direct_pwm);
-  motor_right.setSpeed(RM_direct_pwm);
+auto rampToward = [](int cur, int tgt, int rate) -> int {
+  int d = tgt - cur;
+  if (d >  rate) return cur + rate;
+  if (d < -rate) return cur - rate;
+  return tgt;
+};
+LM_current_pwm = rampToward(LM_current_pwm, LM_direct_pwm, PWM_RAMP_RATE);
+RM_current_pwm = rampToward(RM_current_pwm, RM_direct_pwm, PWM_RAMP_RATE);
+motor_left.setSpeed(LM_current_pwm);
+motor_right.setSpeed(RM_current_pwm);
 }
 
 void readEncoder_left()

@@ -51,6 +51,7 @@ private:
   double deadband_rad_s_{0.5};     // tune on your hardware
   int    pwm_min_{60};             // minimum PWM that actually moves the wheel
   int    pwm_max_{255};
+  double reverse_scale_{1.0};   // >1.0 if backward is slower, <1.0 if faster
 };
 
 }  // namespace zyron_firmware

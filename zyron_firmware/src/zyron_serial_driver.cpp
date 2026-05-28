@@ -39,13 +39,14 @@ CallbackReturn ZyronSerialDriver::on_configure(const rclcpp_lifecycle::State &)
   deadband_rad_s_  = declare_parameter("deadband_rad_s",  0.5);
   pwm_min_         = declare_parameter("pwm_min",         60);
   pwm_max_         = declare_parameter("pwm_max",         255);
+  reverse_scale_   = declare_parameter("reverse_scale",   1.0);
 
   state_pub_ = create_publisher<sensor_msgs::msg::JointState>(
       "/zyron/joint_states", 10);
   imu_pub_ = create_publisher<sensor_msgs::msg::Imu>(
       "/zyron/imu", 10);
   cmd_sub_ = create_subscription<std_msgs::msg::Float64MultiArray>(
-      "/zyron/wheel_commands", 10,
+      "/zyron/wheel_commands", rclcpp::QoS(1).keep_last(1),
       std::bind(&ZyronSerialDriver::command_callback, this, std::placeholders::_1));
 
   RCLCPP_INFO(get_logger(), "Configured. Port: %s", port_.c_str());
@@ -61,6 +62,14 @@ CallbackReturn ZyronSerialDriver::on_activate(const rclcpp_lifecycle::State &)
     mcu_.Open(port_);
     mcu_.SetBaudRate(LibSerial::BaudRate::BAUD_115200);
     mcu_.FlushIOBuffers();
+
+    // ── Sync to a clean frame boundary.
+    // The MCU keeps transmitting during flush; the first ReadLine may
+    // catch a partial line whose leading bytes were already in flight.
+    // Discard it so every subsequent read starts at a known delimiter.
+    std::string sync_line;
+    try { mcu_.ReadLine(sync_line, '\n', 100); }
+    catch (const LibSerial::ReadTimeout &) { /* nothing in buffer yet — fine */ }
   }
   catch (...)
   {
@@ -127,10 +136,17 @@ void ZyronSerialDriver::read_from_mcu()
   if (!mcu_.IsOpen())
     return;
 
-  // Drain every complete line available this tick instead of reading
-  // one line and leaving the rest to accumulate.
-  while (mcu_.IsDataAvailable())
+  // Process at most N lines per 10 ms tick so the executor can
+  // service bond heartbeats and other callbacks between ticks.
+  // Without this cap, a continuously-streaming MCU keeps IsDataAvailable()
+  // true forever, blocking the executor and causing the lifecycle manager
+  // bond to time out.
+  constexpr int kMaxLinesPerTick = 10;
+  int count = 0;
+
+  while (count < kMaxLinesPerTick && mcu_.IsDataAvailable())
   {
+    ++count;
     try
     {
       std::string line;
@@ -246,7 +262,10 @@ void ZyronSerialDriver::command_callback(
     const int pwm = static_cast<int>(
         std::round(pwm_min_ + ratio * (pwm_max_ - pwm_min_)));
 
-    return sign * pwm;
+    const int adjusted = (sign < 0)
+        ? static_cast<int>(std::round(pwm * reverse_scale_))
+        : pwm;
+    return sign * std::clamp(adjusted, 0, pwm_max_);
   };
 
   std::ostringstream ss;

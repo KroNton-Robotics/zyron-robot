@@ -28,6 +28,11 @@ ament_target_dependencies(zyron_control
   std_msgs
 )
 
+install(PROGRAMS
+  zyron_control/twist_to_twist_stamped.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 pluginlib_export_plugin_description_file(hardware_interface zyron_interface.xml)
 
 install(TARGETS zyron_control

@@ -85,7 +85,7 @@ CallbackReturn ZyronInterface::on_activate(const rclcpp_lifecycle::State &)
     std::bind(&ZyronInterface::joint_state_callback, this, std::placeholders::_1));
 
   cmd_pub_ = node_->create_publisher<std_msgs::msg::Float64MultiArray>(
-    "/zyron/wheel_commands", 10);
+    "/zyron/wheel_commands", rclcpp::QoS(1).keep_last(1));
 
   // Prefer adding node to the CM executor (zero extra threads)
   auto executor = executor_.lock();

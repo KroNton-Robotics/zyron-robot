@@ -42,6 +42,7 @@ def generate_launch_description():
     controller_manager = Node(
         package="controller_manager",
         executable="ros2_control_node",
+        remappings=[('/zyron_controller/cmd_vel','/zyron_controller/cmd_vel_stamped')],
         parameters=[
             {"robot_description": robot_description, "use_sim_time": False},
             os.path.join(
@@ -62,8 +63,15 @@ def generate_launch_description():
         package="controller_manager",
         executable="spawner",
         arguments=["zyron_controller", "--controller-manager", "/controller_manager"],
+        
     )
 
+    twist_relay_node = Node(
+        package='zyron_control',
+        executable='twist_to_twist_stamped.py',
+        name='twist_to_twist_stamped',
+        output='screen',
+    )
 
     local_localization_ekf = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -74,7 +82,8 @@ def generate_launch_description():
         zyron_firmware_driver,
         robot_state_publisher,
         controller_manager,
-        joint_state_broadcaster_spawner,
+        # joint_state_broadcaster_spawner,
         zyron_controller_spawner,
-        local_localization_ekf
+        local_localization_ekf,
+        twist_relay_node
     ])

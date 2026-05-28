@@ -43,8 +43,8 @@ zyron_controller:
         max_velocity:            0.7   # m/s
         min_velocity:           -0.7
         has_acceleration_limits: true
-        max_acceleration:        0.7   # m/s²
-        min_acceleration:       -0.7
+        max_acceleration:        1.5   # m/s²
+        min_acceleration:       -1.5
         has_jerk_limits:         false
     angular:
       z:
@@ -52,8 +52,8 @@ zyron_controller:
         max_velocity:            8.5   # rad/s
         min_velocity:           -8.5
         has_acceleration_limits: true
-        max_acceleration:        5.0   # rad/s²
-        min_acceleration:       -5.0
+        max_acceleration:        15.0  # rad/s²
+        min_acceleration:       -15.0
         has_jerk_limits:         false
 
 

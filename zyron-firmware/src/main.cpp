@@ -6,6 +6,7 @@
 void setup()
 {
   Serial.begin(115200);
+  Serial.setTimeout(50);  // ms — prevents readStringUntil from blocking on partial frames
   motorsSetup();
   setupIMU();
 }
@@ -44,5 +45,5 @@ void loop()
   Serial.print(",");  Serial.print(imu_gy, 4);      // gy (rad/s)
   Serial.print(",");  Serial.println(imu_gz, 4);    // gz (rad/s)
 
-  delay(15); // ~67 Hz loop
+  delay(5); // ~200 Hz loop
 }

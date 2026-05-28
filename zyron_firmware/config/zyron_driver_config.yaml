@@ -3,6 +3,7 @@ zyron_serial_driver:
     port: /dev/ttyUSB0
     baud_rate: 115200
     max_speed_rad_s: 20.94   # 200 RPM
-    deadband_rad_s:  0.5     # start here, lower if response feels sluggish
+    deadband_rad_s:  0.3     # start here, lower if response feels sluggish
     pwm_min:         60      # raise if wheel barely moves at low commands
     max_pwm:         255
+    reverse_scale:   1.0    # >1.0 if backward is slower than forward, <1.0 if faster
