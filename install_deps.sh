@@ -53,12 +53,6 @@ echo "==> Installing nav2_lifecycle_manager..."
 sudo apt-get install -y \
     ros-${ROS_DISTRO}-nav2-lifecycle-manager
 
-# ── Simulation support (gz_ros2_control / Gazebo Harmonic) ───────────────────
-echo "==> Installing Gazebo Sim / gz_ros2_control (for simulation)..."
-sudo apt-get install -y \
-    ros-${ROS_DISTRO}-gz-ros2-control \
-    ros-${ROS_DISTRO}-ros-gz-sim \
-    ros-${ROS_DISTRO}-ros-gz-bridge
 
 # ── System library: LibSerial (zyron_firmware serial driver) ─────────────────
 echo "==> Installing libserial-dev..."
@@ -68,11 +62,3 @@ sudo apt-get install -y \
 # ── Serial port access: add user to dialout group ────────────────────────────
 echo "==> Adding ${USER} to dialout group (serial port access for /dev/ttyUSB0)..."
 sudo usermod -aG dialout "$USER"
-echo "    NOTE: log out and back in (or run 'newgrp dialout') for group change to take effect."
-
-echo ""
-echo "==> All dependencies installed successfully."
-echo "    Source ROS 2 before building:"
-echo "      source /opt/ros/${ROS_DISTRO}/setup.bash"
-echo "    Then build the workspace:"
-echo "      cd ~/kronton_ws && colcon build --symlink-install"

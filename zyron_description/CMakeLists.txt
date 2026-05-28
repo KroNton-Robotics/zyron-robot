@@ -4,7 +4,7 @@ project(zyron_description)
 find_package(ament_cmake REQUIRED)
 
 install(
-  DIRECTORY urdf launch
+  DIRECTORY urdf 
   DESTINATION share/${PROJECT_NAME}
 )
 
