@@ -2,6 +2,6 @@
   <class name="zyron_control/ZyronInterface"
     type="zyron_control::ZyronInterface"
     base_class_type="hardware_interface::SystemInterface">
-    <description>Zyron Hardware Interface — communicates via ROS2 topics</description>
+    <description>Zyron hardware interface with an embedded real-time-safe serial driver</description>
   </class>
 </library>

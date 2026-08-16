@@ -2,11 +2,17 @@ controller_manager:
   ros__parameters:
     update_rate: 100  # Hz
 
+    hardware_components_initial_state:
+      shutdown_on_initial_state_failure: false
+
     zyron_controller:
       type: diff_drive_controller/DiffDriveController
 
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
+
+    zyron_imu_broadcaster:
+      type: imu_sensor_broadcaster/IMUSensorBroadcaster
 
     simple_velocity_controller:
       type: velocity_controllers/JointGroupVelocityController
@@ -62,3 +68,11 @@ simple_velocity_controller:
     joints:
       - wheel_left_joint
       - wheel_right_joint
+
+zyron_imu_broadcaster:
+  ros__parameters:
+    sensor_name: imu
+    frame_id: imu_link
+    static_covariance_orientation: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    static_covariance_angular_velocity: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    static_covariance_linear_acceleration: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
