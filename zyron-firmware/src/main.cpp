@@ -32,11 +32,12 @@ constexpr float RIGHT_TICKS_PER_REVOLUTION = 224.0;
 CytronMD motor_left(PWM_DIR, motorL_PWM, motorL_DIR);
 CytronMD motor_right(PWM_DIR, motorR_PWM, motorR_DIR);
 
-int RM_output = 0;
-int LM_output = 0;
-
-
-
+double RM_RPS_output = 0.0;
+double LM_RPS_output = 0.0;
+int LM_pwm_output = 0;
+int RM_pwm_output = 0;
+double pwm_multiplier;
+int max_pwm;
 MPU6050 mpu;
 bool dmpReady = false;
 uint8_t fifoBuffer[64];
@@ -65,6 +66,8 @@ void sendFeedback(unsigned long current_time);
 void IRAM_ATTR leftEncoderISR();
 void IRAM_ATTR rightEncoderISR();
 void setupIMU();
+void set_motor_specs(double max_rpm, int max_pwm = 255);
+int calculate_pwm(double target_rads);
 void updateIMU();
 
 void setup()
@@ -74,6 +77,7 @@ void setup()
   Serial.setTimeout(10);
   setupIMU();
   motorsSetup();
+  set_motor_specs(280, 255);
 }
 
 void loop()
@@ -94,29 +98,32 @@ void loop()
       char sign = chunk.charAt(1);  // 'p' or 'n'
 
       // Extract the numbers after the prefix and convert to integer
-      int pwm_val = chunk.substring(2).toInt();
+      double RPS_val = chunk.substring(2).toInt();
 
       // Apply the negative sign if moving backwards
       if (sign == 'n')
       {
-        pwm_val = -pwm_val;
+        RPS_val = -RPS_val;
       }
 
       // Assign to the correct motor
       if (motor == 'r')
       {
-        RM_output = pwm_val;
+        RM_RPS_output = RPS_val;
       }
       else if (motor == 'l')
       {
-        LM_output = pwm_val;
+        LM_RPS_output = RPS_val;
       }
     }
   }
 
   // Update motor speeds continually
-  motor_left.setSpeed(LM_output);
-  motor_right.setSpeed(RM_output);
+  LM_pwm_output = calculate_pwm(LM_RPS_output);
+  RM_pwm_output = calculate_pwm(RM_RPS_output);
+
+  motor_left.setSpeed(LM_pwm_output);
+  motor_right.setSpeed(RM_pwm_output);
   updateIMU();
 
   // SEND ENCODER FEEDBACK (Runs at 20Hz / every 50ms)
@@ -145,20 +152,20 @@ void motorsSetup()
 void setupIMU()
 {
   Wire.begin();
-  Wire.setClock(400000); 
+  Wire.setClock(400000);
 
   mpu.initialize();
-  if (mpu.dmpInitialize() == 0) 
+  if (mpu.dmpInitialize() == 0)
   {
     // supply your own gyro offsets here
     mpu.setXGyroOffset(-15);
     mpu.setYGyroOffset(20);
     mpu.setZGyroOffset(0);
-    mpu.setZAccelOffset(1788); 
+    mpu.setZAccelOffset(1788);
 
     mpu.CalibrateAccel(6);
     mpu.CalibrateGyro(6);
-    
+
     mpu.setDMPEnabled(true);
     dmpReady = true;
   }
@@ -166,7 +173,8 @@ void setupIMU()
 
 void updateIMU()
 {
-  if (!dmpReady) return;
+  if (!dmpReady)
+    return;
 
   // Read latest packet from FIFO
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer))
@@ -220,12 +228,12 @@ String buildImuFrame()
   frame += "y" + String(latest_yaw, 4) + ",";
   frame += "p" + String(latest_pitch, 4) + ",";
   frame += "r" + String(latest_roll, 4) + ",";
-  
+
   // ax = Accel X, ay = Accel Y, az = Accel Z
   frame += "ax" + String(latest_ax, 2) + ",";
   frame += "ay" + String(latest_ay, 2) + ",";
   frame += "az" + String(latest_az, 2) + ",";
-  
+
   return frame;
 }
 
@@ -264,6 +272,28 @@ void sendFeedback(unsigned long current_time)
   // 7. Update previous values for the next loop calculation
   prev_left_count = current_left;
   prev_right_count = current_right;
+}
+
+// 1. Setup Phase: Run this once during on_init() or on_configure()
+void set_motor_specs(double max_rpm, int max_pwm)
+{
+  max_pwm = max_pwm;
+
+  // Convert input RPM to rad/s
+  double max_rads = max_rpm * (2.0 * M_PI / 60.0);
+
+  // Calculate and store the conversion multiplier
+  pwm_multiplier = max_pwm / max_rads;
+}
+
+// 2. Control Phase: Run this at 50Hz+ in your write() loop
+int calculate_pwm(double target_rads)
+{
+  // Use the pre-calculated multiplier to save CPU cycles
+  double pwm_float = std::abs(target_rads) * pwm_multiplier;
+
+  // Clamp to hardware limits (e.g., 0-255)
+  return std::min(static_cast<int>(pwm_float), max_pwm);
 }
 
 void IRAM_ATTR leftEncoderISR()

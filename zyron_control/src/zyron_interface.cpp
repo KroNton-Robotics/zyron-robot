@@ -24,10 +24,9 @@ hardware_interface::CallbackReturn ZyronInterface::on_init
     }
 
     info_ = info;
-
     port_ = info_.hardware_parameters["mcu_serial_port"];
-
     driver_ = std::make_shared<zyron_control::ZyronSerialDriver>(port_);
+
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -39,16 +38,6 @@ hardware_interface::CallbackReturn ZyronInterface::on_configure
         return hardware_interface::CallbackReturn::ERROR;
     }
 
-    // for (const auto & [name, descr] : joint_command_interfaces_)
-    // {
-    //     RCLCPP_INFO(get_logger(), "COMMAND INTERFACE NAME: ");
-    //     RCLCPP_INFO(get_logger(), name.c_str());
-    // }
-    // for (const auto & [name, descr] : joint_state_interfaces_)
-    // {
-    //     RCLCPP_INFO(get_logger(), "STATE INTERFACE NAME: ");
-    //     RCLCPP_INFO(get_logger(), name.c_str());
-    // }
 
     return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -61,8 +50,6 @@ hardware_interface::CallbackReturn ZyronInterface::on_activate
     set_state("base_right_wheel_joint/velocity", 0.0);
     set_state("base_left_wheel_joint/position", 0.0);
     set_state("base_right_wheel_joint/position", 0.0);
-    driver_->activateWithVelocityMode(left_motor_id_);
-    driver_->activateWithVelocityMode(right_motor_id_);
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -70,8 +57,7 @@ hardware_interface::CallbackReturn ZyronInterface::on_deactivate
     (const rclcpp_lifecycle::State & previous_state)
 {
     (void)previous_state;
-    driver_->deactivate(left_motor_id_);
-    driver_->deactivate(right_motor_id_);
+
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -79,16 +65,17 @@ hardware_interface::return_type ZyronInterface::read
     (const rclcpp::Time & time, const rclcpp::Duration & period)
 {
     (void)time;
-    double left_vel = driver_->getVelocityRadianPerSec(left_motor_id_);
-    double right_vel = -1.0 * driver_->getVelocityRadianPerSec(right_motor_id_);
+    std::string serial_msg=driver_->readSerialData();
+    std::array<float, 8> parsed_serial_msg=driver_->getParsedSerialMsg(serial_msg);
+    double left_vel = parsed_serial_msg[1];
+    double right_vel = parsed_serial_msg[0];
     if (abs(left_vel) < 0.03) { left_vel = 0.0; }
     if (abs(right_vel) < 0.03) { right_vel = 0.0; }
-    set_state("base_left_wheel_joint/velocity", left_vel);
-    set_state("base_right_wheel_joint/velocity", right_vel);
-    set_state("base_left_wheel_joint/position", get_state("base_left_wheel_joint/position") + left_vel * period.seconds());
-    set_state("base_right_wheel_joint/position", get_state("base_right_wheel_joint/position") + right_vel * period.seconds());
-    // RCLCPP_INFO(get_logger(), "left vel: %lf, right vel: %lf, left pos: %lf, right pos: %lf",
-    //          left_vel, right_vel, get_state("base_left_wheel_joint/position"), get_state("base_right_wheel_joint/position"));
+    set_state("left_wheel_joint/velocity", left_vel);
+    set_state("right_wheel_joint/velocity", right_vel);
+    set_state("left_wheel_joint/position", get_state("left_wheel_joint/position") + left_vel * period.seconds());
+    set_state("right_wheel_joint/position", get_state("right_wheel_joint/position") + right_vel * period.seconds());
+
     return hardware_interface::return_type::OK;
 }
 
@@ -97,8 +84,10 @@ hardware_interface::return_type ZyronInterface::write
 {
     (void)time;
     (void)period;
+    
     driver_->setTargetVelocityRadianPerSec(left_motor_id_, get_command("base_left_wheel_joint/velocity"));
     driver_->setTargetVelocityRadianPerSec(right_motor_id_, -1.0 * get_command("base_right_wheel_joint/velocity"));
+    
     // RCLCPP_INFO(get_logger(), "left vel: %lf, right vel: %lf", get_command("base_left_wheel_joint/velocity"), 
     //                     get_command("base_right_wheel_joint/velocity"));
     return hardware_interface::return_type::OK;
