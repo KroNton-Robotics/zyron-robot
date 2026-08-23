@@ -3,7 +3,7 @@
 
   <!-- ─── Parameters ──────────────────────────────────────────── -->
   <xacro:arg name="is_sim" default="True"/>
-  <xacro:arg name="serial_port" default="/dev/ttyUSB0"/>
+  <xacro:arg name="mcu_serial_port" default="/dev/ttyUSB0"/>
 
   <!-- Robot dimensions (update to match your hardware) -->
   <xacro:property name="base_length"     value="0.30"/>
@@ -145,36 +145,22 @@
       <hardware>
         <plugin>zyron_control/ZyronInterface</plugin>
         <param name="port">$(arg serial_port)</param>
-        <param name="baud_rate">460800</param>
-        <param name="left_counts_per_rev">228.0</param>
-        <param name="right_counts_per_rev">224.0</param>
-        <param name="max_speed_rad_s">20.94</param>
-        <param name="start_threshold_rad_s">0.5</param>
-        <param name="stop_threshold_rad_s">0.2</param>
-        <param name="left_pwm_min">60</param>
-        <param name="right_pwm_min">60</param>
-        <param name="pwm_max">255</param>
-        <param name="left_kp">1.0</param>
-        <param name="left_ki">2.0</param>
-        <param name="right_kp">1.0</param>
-        <param name="right_ki">2.0</param>
-        <param name="max_acceleration_rad_s2">15.0</param>
-        <param name="velocity_filter_tau_s">0.1</param>
-        <param name="firmware_watchdog_ms">200</param>
-        <param name="startup_timeout_ms">10000</param>
-        <param name="state_timeout_ms">250</param>
-        <param name="imu_timeout_ms">250</param>
+        <param name="baud_rate">115200</param>
+
       </hardware>
+
       <joint name="wheel_left_joint">
         <command_interface name="velocity"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
       </joint>
+
       <joint name="wheel_right_joint">
         <command_interface name="velocity"/>
         <state_interface name="position"/>
         <state_interface name="velocity"/>
       </joint>
+
       <sensor name="imu">
         <state_interface name="orientation.x"/>
         <state_interface name="orientation.y"/>

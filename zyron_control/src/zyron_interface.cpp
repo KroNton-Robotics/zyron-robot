@@ -46,10 +46,24 @@ hardware_interface::CallbackReturn ZyronInterface::on_activate
     (const rclcpp_lifecycle::State & previous_state)
 {
     (void)previous_state;
-    set_state("base_left_wheel_joint/velocity", 0.0);
-    set_state("base_right_wheel_joint/velocity", 0.0);
-    set_state("base_left_wheel_joint/position", 0.0);
-    set_state("base_right_wheel_joint/position", 0.0);
+    // (Matches the exact URDF names from earlier)
+    set_state("left_wheel_joint/velocity", 0.0);
+    set_state("right_wheel_joint/velocity", 0.0);
+    set_state("left_wheel_joint/position", 0.0);
+    set_state("right_wheel_joint/position", 0.0);
+
+    // IMU Initialization (Matches the exact URDF names from earlier)
+    set_state("imu/orientation.x", 0.0);
+    set_state("imu/orientation.y", 0.0);
+    set_state("imu/orientation.z", 0.0);
+    set_state("imu/orientation.w", 0.0);
+    set_state("imu/angular_velocity.x", 0.0);
+    set_state("imu/angular_velocity.y", 0.0);
+    set_state("imu/angular_velocity.z", 0.0);
+    set_state("imu/linear_acceleration.x", 0.0);
+    set_state("imu/linear_acceleration.y", 0.0);
+    set_state("imu/linear_acceleration.z", 0.0);
+
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -76,6 +90,14 @@ hardware_interface::return_type ZyronInterface::read
     set_state("left_wheel_joint/position", get_state("left_wheel_joint/position") + left_vel * period.seconds());
     set_state("right_wheel_joint/position", get_state("right_wheel_joint/position") + right_vel * period.seconds());
 
+    set_state("imu/orientation.x", parsed_serial_msg[2]);
+    set_state("imu/orientation.y", parsed_serial_msg[3]);
+    set_state("imu/orientation.z", parsed_serial_msg[4]);
+    set_state("imu/orientation.w", parsed_serial_msg[5]);
+    set_state("imu/linear_acceleration.x", parsed_serial_msg[6]);
+    set_state("imu/linear_acceleration.y", parsed_serial_msg[7]);
+    set_state("imu/linear_acceleration.z", parsed_serial_msg[8]);
+
     return hardware_interface::return_type::OK;
 }
 
@@ -85,11 +107,9 @@ hardware_interface::return_type ZyronInterface::write
     (void)time;
     (void)period;
     
-    driver_->setTargetVelocityRadianPerSec(left_motor_id_, get_command("base_left_wheel_joint/velocity"));
-    driver_->setTargetVelocityRadianPerSec(right_motor_id_, -1.0 * get_command("base_right_wheel_joint/velocity"));
-    
-    // RCLCPP_INFO(get_logger(), "left vel: %lf, right vel: %lf", get_command("base_left_wheel_joint/velocity"), 
-    //                     get_command("base_right_wheel_joint/velocity"));
+    driver_->buildRpsFrame(get_command("right_wheel_joint/velocity"),get_command("left_wheel_joint/velocity"));
+    // RCLCPP_INFO(get_logger(), "left vel: %lf, right vel: %lf", get_command("left_wheel_joint/velocity"), 
+    //                     get_command("right_wheel_joint/velocity"));
     return hardware_interface::return_type::OK;
 }
 
