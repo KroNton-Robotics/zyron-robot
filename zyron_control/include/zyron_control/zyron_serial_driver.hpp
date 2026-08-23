@@ -17,7 +17,7 @@ namespace zyron_control
     ZyronSerialDriver(std::string device_name);
     ~ZyronSerialDriver();
     int init();
-    std::string buildPwmFrame(int right_vel, int left_vel);
+    std::string buildRpsFrame(int right_vel, int left_vel);
 
     std::array<float, 8> getParsedSerialMsg(const std::string& line);
     std::string readSerialData();
