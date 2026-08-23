@@ -37,7 +37,7 @@ namespace zyron_control
     }
   }
 
-  std::string ZyronSerialDriver::buildPwmFrame(int right_vel, int left_vel)
+  std::string ZyronSerialDriver::buildRpsFrame(int right_vel, int left_vel)
   {
     std::stringstream message_stream;
     char right_wheel_sign = right_vel >= 0 ? 'p' : 'n';
