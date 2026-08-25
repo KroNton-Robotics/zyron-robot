@@ -191,9 +191,10 @@ void updateIMU()
   // Read latest packet from FIFO
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer))
   {
-    // Get Orientation
+    // Get Orientation (gravity-referenced yaw/pitch/roll)
     mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetEuler(euler, &q);
+    mpu.dmpGetGravity(&gravity, &q);
+    mpu.dmpGetYawPitchRoll(euler, &q, &gravity);
 
     latest_yaw = euler[0];
     latest_pitch = euler[1];
@@ -201,7 +202,6 @@ void updateIMU()
 
     // Get Acceleration
     mpu.dmpGetAccel(&aa, fifoBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
 
     latest_ax = aaReal.x / 10.0;
