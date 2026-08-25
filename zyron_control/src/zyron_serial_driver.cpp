@@ -54,15 +54,15 @@ namespace zyron_control
   }
 
   // Changed to std::array to avoid dynamic memory allocation in the RT loop
-  std::array<float, 8> ZyronSerialDriver::getParsedSerialMsg(const std::string &line)
+  std::array<double, 8> ZyronSerialDriver::getParsedSerialMsg(const std::string &line)
   {
-    std::array<float, 8> feedback_data = {0.0f}; // Initialize all to 0.0
+    std::array<double, 8> feedback_data = {0.0}; // Initialize all to 0.0
     std::stringstream ss(line);
     std::string chunk;
 
-    float yaw = 0.0, pitch = 0.0, roll = 0.0;
-    float ax = 0.0, ay = 0.0, az = 0.0;
-    float right_encoder_vel = 0.0, left_encoder_vel = 0.0;
+    double yaw = 0.0, pitch = 0.0, roll = 0.0;
+    double ax = 0.0, ay = 0.0, az = 0.0;
+    double right_encoder_vel = 0.0, left_encoder_vel = 0.0;
 
     while (std::getline(ss, chunk, ','))
     {
@@ -71,16 +71,16 @@ namespace zyron_control
 
       try
       {
-        if (chunk.find("rp") == 0) right_encoder_vel = std::stof(chunk.substr(2));
-        else if (chunk.find("rn") == 0) right_encoder_vel = -std::stof(chunk.substr(2));
-        else if (chunk.find("lp") == 0) left_encoder_vel = std::stof(chunk.substr(2));
-        else if (chunk.find("ln") == 0) left_encoder_vel = -std::stof(chunk.substr(2));
-        else if (chunk.find("ax") == 0) ax = std::stof(chunk.substr(2));
-        else if (chunk.find("ay") == 0) ay = std::stof(chunk.substr(2));
-        else if (chunk.find("az") == 0) az = std::stof(chunk.substr(2));
-        else if (chunk.find("y") == 0) yaw = std::stof(chunk.substr(1));
-        else if (chunk.find("p") == 0) pitch = std::stof(chunk.substr(1));
-        else if (chunk.find("r") == 0) roll = std::stof(chunk.substr(1)); // Safe because rp/rn are checked first
+        if (chunk.find("rp") == 0) right_encoder_vel = std::stod(chunk.substr(2));
+        else if (chunk.find("rn") == 0) right_encoder_vel = -std::stod(chunk.substr(2));
+        else if (chunk.find("lp") == 0) left_encoder_vel = std::stod(chunk.substr(2));
+        else if (chunk.find("ln") == 0) left_encoder_vel = -std::stod(chunk.substr(2));
+        else if (chunk.find("ax") == 0) ax = std::stod(chunk.substr(2));
+        else if (chunk.find("ay") == 0) ay = std::stod(chunk.substr(2));
+        else if (chunk.find("az") == 0) az = std::stod(chunk.substr(2));
+        else if (chunk.find("y") == 0) yaw = std::stod(chunk.substr(1));
+        else if (chunk.find("p") == 0) pitch = std::stod(chunk.substr(1));
+        else if (chunk.find("r") == 0) roll = std::stod(chunk.substr(1)); // Safe because rp/rn are checked first
       }
       catch (const std::exception &e)
       {

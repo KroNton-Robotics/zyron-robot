@@ -19,7 +19,7 @@ namespace zyron_control
     int init();
     std::string buildRpsFrame(int right_vel, int left_vel);
 
-    std::array<float, 8> getParsedSerialMsg(const std::string& line);
+    std::array<double, 8> getParsedSerialMsg(const std::string& line);
     std::string readSerialData();
     void sendSerialFrame(const std::string &frame);
     

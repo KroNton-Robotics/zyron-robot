@@ -59,6 +59,7 @@ float latest_az = 0.0;
 
 // Timing
 unsigned long last_time = 0;
+unsigned long last_serial_time = 0;  // Watchdog: tracks last serial reception
 
 // Function Prototypes
 void motorsSetup();
@@ -78,6 +79,7 @@ void setup()
   setupIMU();
   motorsSetup();
   set_motor_specs(280, 255);
+  last_serial_time = millis();  // Initialize watchdog so motors don't false-trigger on boot
 }
 
 void loop()
@@ -98,7 +100,7 @@ void loop()
       char sign = chunk.charAt(1);  // 'p' or 'n'
 
       // Extract the numbers after the prefix and convert to integer
-      double RPS_val = chunk.substring(2).toInt();
+      double RPS_val = chunk.substring(2).toDouble();
 
       // Apply the negative sign if moving backwards
       if (sign == 'n')
@@ -115,12 +117,22 @@ void loop()
       {
         LM_RPS_output = RPS_val;
       }
+
+      // Update watchdog timestamp on valid command
+      last_serial_time = millis();
     }
   }
 
+  // Watchdog: if no serial data received for 500ms, stop motors
+  if (millis() - last_serial_time > 500)
+  {
+    RM_RPS_output = 0.0;
+    LM_RPS_output = 0.0;
+  }
+
   // Update motor speeds continually
-  LM_pwm_output = calculate_pwm(LM_RPS_output);
-  RM_pwm_output = calculate_pwm(RM_RPS_output);
+  LM_pwm_output = constrain(calculate_pwm(LM_RPS_output), -max_pwm, max_pwm); 
+  RM_pwm_output = constrain(calculate_pwm(RM_RPS_output), -max_pwm, max_pwm);  
 
   motor_left.setSpeed(LM_pwm_output);
   motor_right.setSpeed(RM_pwm_output);
@@ -275,9 +287,9 @@ void sendFeedback(unsigned long current_time)
 }
 
 // 1. Setup Phase: Run this once during on_init() or on_configure()
-void set_motor_specs(double max_rpm, int max_pwm)
+void set_motor_specs(double max_rpm, int in_max_pwm)
 {
-  max_pwm = max_pwm;
+  max_pwm = in_max_pwm;
 
   // Convert input RPM to rad/s
   double max_rads = max_rpm * (2.0 * M_PI / 60.0);
@@ -290,10 +302,16 @@ void set_motor_specs(double max_rpm, int max_pwm)
 int calculate_pwm(double target_rads)
 {
   // Use the pre-calculated multiplier to save CPU cycles
-  double pwm_float = std::abs(target_rads) * pwm_multiplier;
+  int pwm = target_rads * pwm_multiplier;
 
-  // Clamp to hardware limits (e.g., 0-255)
-  return std::min(static_cast<int>(pwm_float), max_pwm);
+  // For backward movement, the Cytron PWM_DIR mode needs the complement
+  // so that low speed = low duty cycle (not inverted)
+  if (pwm < 0)
+  {
+    pwm = -(max_pwm - abs(pwm));
+  }
+
+  return pwm;
 }
 
 void IRAM_ATTR leftEncoderISR()
