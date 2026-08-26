@@ -12,7 +12,7 @@ amcl:
     alpha5: 0.2             # Only for omnidirectional robots (not used in Differential)
 
     # --- COORDINATE FRAMES ---
-    base_frame_id: "base_link"
+    base_frame_id: "base_footprint"
     global_frame_id: "map"
     odom_frame_id: "odom"
     tf_broadcast: true      # Publish the transform between map and odom
