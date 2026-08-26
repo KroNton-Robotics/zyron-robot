@@ -1,0 +1,70 @@
+amcl:
+  ros__parameters:
+    use_sim_time: True      # Use Gazebo's clock instead of the system clock
+    
+    # --- MOTION MODEL (Prediction Step) ---
+    # These "alphas" define how much noise (uncertainty) is added during movement.
+    # Higher values = particles spread out faster.
+    alpha1: 0.2             # Noise in rotation from rotational component of motion
+    alpha2: 0.2             # Noise in rotation from translational component
+    alpha3: 0.2             # Noise in translation from translational component
+    alpha4: 0.2             # Noise in translation from rotational component
+    alpha5: 0.2             # Only for omnidirectional robots (not used in Differential)
+
+    # --- COORDINATE FRAMES ---
+    base_frame_id: "base_link"
+    global_frame_id: "map"
+    odom_frame_id: "odom"
+    tf_broadcast: true      # Publish the transform between map and odom
+
+    # --- BEAM SKIPPING (Optimization) ---
+    # Used to ignore sensor readings that don't match the map (like moving people)
+    do_beamskip: false      # If true, ignores beams that don't match the map well
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+
+    # --- SENSOR MODEL (Measurement Update) ---
+    laser_model_type: "likelihood_field" # The method used to calculate particle weights
+    laser_likelihood_max_dist: 2.0       # Max distance to consider obstacles in the map
+    laser_max_range: 100.0               # Ignore lidar points further than this
+    laser_min_range: -1.0                # Ignore lidar points closer than this
+    max_beams: 60                        # How many lidar beams to use for weighting (fewer = faster)
+    
+    # Weighting components for the "z" parameters:
+    z_hit: 0.5              # This represents the probability that the beam hit exactly what is in your map. (matching the map)
+    z_rand: 0.5             # This represents "Phantom" readings—random noise that has no physical explanation.
+    z_max: 0.05             # This represents the probability that the sensor failed and returned a "Max Range" reading (e.g., the beam hit a mirror)
+    z_short: 0.05           # This accounts for things that are in the real world but not in your map
+    sigma_hit: 0.2          # Standard deviation (spread) of the Gaussian for z_hit
+    lambda_short: 0.1       # Exponential decay parameter for z_short
+
+    # --- PARTICLE FILTER CONFIGURATION ---
+    max_particles: 8000     # Upper limit of the cloud size
+    min_particles: 200      # Lower limit (it won't shrink smaller than this)
+    pf_err: 0.05            # Allowed error between true distribution and particle estimate
+    pf_z: 0.99              # Quantile for the pf_err calculation
+
+    # --- RECOVERY (Kidnapped Robot Problem) ---
+    # Used to add random particles if the robot realizes it is lost
+    recovery_alpha_fast: 0.0 # Rate for recovering from being totally lost
+    recovery_alpha_slow: 0.0 # Rate for recovering from slight drift
+
+    # --- UPDATE TRIGGERS ---
+    # How often to run the "Correction" step
+    resample_interval: 1    # Number of filter updates before resampling particles
+    update_min_a: 0.2       # Robot must rotate this many radians before updating
+    update_min_d: 0.25      # Robot must move this many meters before updating
+    
+    # --- GENERAL ---
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    save_pose_rate: 0.5     # How often to save the current pose to the disk
+    transform_tolerance: 1.0 # Max time to wait for a transform to be available
+    scan_topic: scan       # The topic name your lidar publishes on
+    
+    # --- INITIALIZATION ---
+    set_initial_pose: true  # Start at a specific point rather than global search
+    initial_pose: 
+        x: 0.015
+        y: 0.015
+        yaw: -0.020

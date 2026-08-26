@@ -1,0 +1,27 @@
+bt_navigator:
+  ros__parameters:
+    use_sim_time: true
+    global_frame: map
+    robot_base_frame: base_link
+    transform_tolerance: 0.1
+    navigators: ['navigate_to_pose', 'navigate_through_poses']
+    
+    # Introspection must be "enabled" for Groot2 to work
+    introspection_mode: "enabled"
+    
+    # Behavior Tree execution settings
+    bt_loop_duration: 10
+    default_server_timeout: 20
+      
+    # Navigator configurations
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
+      enable_groot_monitoring: true
+      groot_server_port: 2000 # Uses 1667 (Server) and 1668 (Publisher)
+      search_window: 2.0
+      
+    navigate_through_poses:
+      plugin: "nav2_bt_navigator::NavigateThroughPosesNavigator"
+      enable_groot_monitoring: true
+      groot_server_port: 1669 # Uses 1669 (Server) and 1670 (Publisher)
+      search_window: 2.0
