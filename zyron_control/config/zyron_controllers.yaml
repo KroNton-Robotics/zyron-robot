@@ -28,7 +28,7 @@ zyron_controller:
     # twist_covariance_diagonal: [0.001, 0.001, 1.0e-3, 1.0e-3, 1.0e-3, 0.01]
 
     # Update these to match your robot's physical dimensions
-    wheel_separation: 0.17   # metres, centre-to-centre
+    wheel_separation: 0.245   # metres, centre-to-centre (inner wheel face is 5mm outside body wall)
     wheel_radius:     0.033  # metres
 
     wheel_separation_multiplier:  1.0
