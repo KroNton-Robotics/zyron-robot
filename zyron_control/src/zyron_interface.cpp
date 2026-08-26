@@ -10,6 +10,7 @@
 #include <limits>
 #include <thread>
 #include <unordered_set>
+#include <tf2/LinearMath/Quaternion.h>
 
 namespace zyron_control
 {
@@ -104,6 +105,19 @@ namespace zyron_control
     {
         (void)time;
         std::string serial_msg = driver_->readSerialData();
+
+        // No new data from MCU this cycle — keep last good state, don't overwrite with zeros.
+        // This is expected: MCU sends at 20Hz but read() is called at 100Hz.
+        if (serial_msg.empty())
+        {
+            // Still integrate wheel positions using last known velocity
+            set_state("wheel_left_joint/position",
+                get_state("wheel_left_joint/position") + get_state("wheel_left_joint/velocity") * period.seconds());
+            set_state("wheel_right_joint/position",
+                get_state("wheel_right_joint/position") + get_state("wheel_right_joint/velocity") * period.seconds());
+            return hardware_interface::return_type::OK;
+        }
+
         std::array<double, 8> parsed_serial_msg = driver_->getParsedSerialMsg(serial_msg);
         double left_vel = parsed_serial_msg[1];
         double right_vel = parsed_serial_msg[0];
@@ -120,10 +134,17 @@ namespace zyron_control
         set_state("wheel_left_joint/position", get_state("wheel_left_joint/position") + left_vel * period.seconds());
         set_state("wheel_right_joint/position", get_state("wheel_right_joint/position") + right_vel * period.seconds());
 
-        set_state("imu/orientation.x", parsed_serial_msg[2]);
-        set_state("imu/orientation.y", parsed_serial_msg[3]);
-        set_state("imu/orientation.z", parsed_serial_msg[4]);
-        set_state("imu/orientation.w", 0.0);
+        // Convert Euler (roll, pitch, yaw) from firmware to quaternion
+        tf2::Quaternion q;
+        q.setRPY(parsed_serial_msg[2],   // roll
+                 parsed_serial_msg[3],   // pitch
+                 parsed_serial_msg[4]);  // yaw
+        q.normalize();
+
+        set_state("imu/orientation.x", q.x());
+        set_state("imu/orientation.y", q.y());
+        set_state("imu/orientation.z", q.z());
+        set_state("imu/orientation.w", q.w());
         set_state("imu/linear_acceleration.x", parsed_serial_msg[5]);
         set_state("imu/linear_acceleration.y", parsed_serial_msg[6]);
         set_state("imu/linear_acceleration.z", parsed_serial_msg[7]);

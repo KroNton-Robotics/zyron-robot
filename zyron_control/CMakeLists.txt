@@ -13,6 +13,7 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(realtime_tools REQUIRED)
+find_package(tf2 REQUIRED)
 
 include_directories(include)
 
@@ -31,6 +32,7 @@ ament_target_dependencies(
   hardware_interface
   pluginlib
   realtime_tools
+  tf2
 )
 
 # LibSerial is a plain system library (libserial-dev), not an ament package
@@ -79,6 +81,7 @@ ament_export_dependencies(
   rclcpp
   rclcpp_lifecycle
   realtime_tools
+  tf2
 )
 
 ament_package()
