@@ -5,61 +5,83 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(std_msgs REQUIRED)
+find_package(realtime_tools REQUIRED)
+find_package(tf2 REQUIRED)
 
-add_library(zyron_control SHARED
+include_directories(include)
+
+# ── C++ hardware interface library ──────────────────────────────────────────
+add_library(
+  ${PROJECT_NAME}
+  SHARED
   src/zyron_interface.cpp
+  src/zyron_serial_driver.cpp
 )
-target_include_directories(zyron_control PUBLIC
-  include
-)
-ament_target_dependencies(zyron_control
+
+ament_target_dependencies(
+  ${PROJECT_NAME}
   rclcpp
   rclcpp_lifecycle
   hardware_interface
   pluginlib
-  sensor_msgs
-  std_msgs
+  realtime_tools
+  tf2
 )
 
-install(PROGRAMS
-  zyron_control/twist_to_twist_stamped.py
-  DESTINATION lib/${PROJECT_NAME}
-)
+# LibSerial is a plain system library (libserial-dev), not an ament package
+target_link_libraries(${PROJECT_NAME} serial)
 
+# Register pluginlib plugin
 pluginlib_export_plugin_description_file(hardware_interface zyron_interface.xml)
 
-install(TARGETS zyron_control
+# ── Install C++ targets ──────────────────────────────────────────────────────
+install(
+  TARGETS ${PROJECT_NAME}
   DESTINATION lib
 )
 
-install(DIRECTORY include/
+install(
+  DIRECTORY include/
   DESTINATION include
 )
 
-install(DIRECTORY launch/
-  DESTINATION share/${PROJECT_NAME}/launch
+# ── Install launch and config directories ────────────────────────────────────
+install(
+  DIRECTORY launch config
+  DESTINATION share/${PROJECT_NAME}
 )
 
-install(DIRECTORY config/
-  DESTINATION share/${PROJECT_NAME}/config
+# ── Install Python package (zyron_control/) ──────────────────────────────────
+ament_python_install_package(${PROJECT_NAME})
+
+# Install the Python node as an executable in lib/<pkg>/ so ros2 run finds it
+install(
+  PROGRAMS
+    zyron_control/twist_to_twist_stamped.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
+# ── Export ───────────────────────────────────────────────────────────────────
 ament_export_include_directories(include)
-ament_export_libraries(zyron_control)
+
+ament_export_libraries(
+  ${PROJECT_NAME}
+)
+
 ament_export_dependencies(
   hardware_interface
   pluginlib
   rclcpp
   rclcpp_lifecycle
-  sensor_msgs
-  std_msgs
+  realtime_tools
+  tf2
 )
 
 ament_package()

@@ -1,192 +1,171 @@
 #include "zyron_control/zyron_interface.hpp"
-#include <hardware_interface/types/hardware_interface_type_values.hpp>
-#include <pluginlib/class_list_macros.hpp>
 
+#include <hardware_interface/types/hardware_interface_type_values.hpp>
+#include "pluginlib/class_list_macros.hpp"
+
+#include <algorithm>
+#include <array>
 #include <chrono>
+#include <exception>
+#include <limits>
+#include <thread>
+#include <unordered_set>
+#include <tf2/LinearMath/Quaternion.h>
 
 namespace zyron_control
 {
 
-ZyronInterface::ZyronInterface()
-{
-}
-
-ZyronInterface::~ZyronInterface()
-{
-  if (running_)
-  {
-    running_ = false;
-    if (spin_thread_.joinable())
+    hardware_interface::CallbackReturn ZyronInterface::on_init(const hardware_interface::HardwareInfo &info)
     {
-      spin_thread_.join();
+        if (hardware_interface::SystemInterface::on_init(info) !=
+            hardware_interface::CallbackReturn::SUCCESS)
+        {
+            return hardware_interface::CallbackReturn::ERROR;
+        }
+
+        info_ = info;
+        port_ = info_.hardware_parameters.at("port");
+        driver_ = std::make_shared<zyron_control::ZyronSerialDriver>(port_);
+
+        return hardware_interface::CallbackReturn::SUCCESS;
     }
-  }
-}
 
-CallbackReturn ZyronInterface::on_init(
-  const hardware_interface::HardwareComponentInterfaceParams & params)
-{
-  CallbackReturn result = hardware_interface::SystemInterface::on_init(params);
-  if (result != CallbackReturn::SUCCESS)
-  {
-    return result;
-  }
-
-  const size_t n = info_.joints.size();
-  position_states_.assign(n, 0.0);
-  velocity_states_.assign(n, 0.0);
-  velocity_commands_.assign(n, 0.0);
-
-  // Store the CM executor for use in on_activate
-  executor_ = params.executor;
-
-  return CallbackReturn::SUCCESS;
-}
-
-std::vector<hardware_interface::StateInterface> ZyronInterface::export_state_interfaces()
-{
-  std::vector<hardware_interface::StateInterface> state_interfaces;
-  for (size_t i = 0; i < info_.joints.size(); i++)
-  {
-    state_interfaces.emplace_back(hardware_interface::StateInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_POSITION, &position_states_[i]));
-    state_interfaces.emplace_back(hardware_interface::StateInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_states_[i]));
-  }
-  return state_interfaces;
-}
-
-std::vector<hardware_interface::CommandInterface> ZyronInterface::export_command_interfaces()
-{
-  std::vector<hardware_interface::CommandInterface> command_interfaces;
-  for (size_t i = 0; i < info_.joints.size(); i++)
-  {
-    command_interfaces.emplace_back(hardware_interface::CommandInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &velocity_commands_[i]));
-  }
-  return command_interfaces;
-}
-
-CallbackReturn ZyronInterface::on_activate(const rclcpp_lifecycle::State &)
-{
-  RCLCPP_INFO(rclcpp::get_logger("ZyronInterface"), "Activating hardware interface ...");
-
-  {
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    std::fill(position_states_.begin(),   position_states_.end(),   0.0);
-    std::fill(velocity_states_.begin(),   velocity_states_.end(),   0.0);
-    std::fill(velocity_commands_.begin(), velocity_commands_.end(), 0.0);
-  }
-
-  node_ = std::make_shared<rclcpp::Node>("zyron_hw_interface");
-
-  state_sub_ = node_->create_subscription<sensor_msgs::msg::JointState>(
-    "/zyron/joint_states", rclcpp::SensorDataQoS(),
-    std::bind(&ZyronInterface::joint_state_callback, this, std::placeholders::_1));
-
-  cmd_pub_ = node_->create_publisher<std_msgs::msg::Float64MultiArray>(
-    "/zyron/wheel_commands", rclcpp::QoS(1).keep_last(1));
-
-  // Prefer adding node to the CM executor (zero extra threads)
-  auto executor = executor_.lock();
-  if (executor)
-  {
-    executor->add_node(node_);
-    node_added_to_executor_ = true;
-    RCLCPP_INFO(rclcpp::get_logger("ZyronInterface"),
-      "Internal node added to ControllerManager executor");
-  }
-  else
-  {
-    // Fallback: own spin thread
-    running_ = true;
-    spin_thread_ = std::thread([this]() {
-      while (running_)
-      {
-        rclcpp::spin_some(node_);
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-      }
-    });
-    RCLCPP_INFO(rclcpp::get_logger("ZyronInterface"),
-      "Internal node spinning on dedicated thread");
-  }
-
-  RCLCPP_INFO(rclcpp::get_logger("ZyronInterface"), "Hardware interface active");
-  return CallbackReturn::SUCCESS;
-}
-
-CallbackReturn ZyronInterface::on_deactivate(const rclcpp_lifecycle::State &)
-{
-  RCLCPP_INFO(rclcpp::get_logger("ZyronInterface"), "Deactivating hardware interface ...");
-
-  if (node_added_to_executor_)
-  {
-    auto executor = executor_.lock();
-    if (executor)
+    hardware_interface::CallbackReturn ZyronInterface::on_configure(const rclcpp_lifecycle::State &previous_state)
     {
-      executor->remove_node(node_);
+        (void)previous_state;
+        if (driver_->init() != 0)
+        {
+            return hardware_interface::CallbackReturn::ERROR;
+        }
+
+        return hardware_interface::CallbackReturn::SUCCESS;
     }
-    node_added_to_executor_ = false;
-  }
-  else
-  {
-    running_ = false;
-    if (spin_thread_.joinable())
+
+    hardware_interface::CallbackReturn ZyronInterface::on_activate(const rclcpp_lifecycle::State &previous_state)
     {
-      spin_thread_.join();
+        (void)previous_state;
+        // (Matches the exact URDF names from the ros2_control block)
+        set_state("wheel_left_joint/velocity", 0.0);
+        set_state("wheel_right_joint/velocity", 0.0);
+        set_state("wheel_left_joint/position", 0.0);
+        set_state("wheel_right_joint/position", 0.0);
+
+        // IMU Initialization
+        set_state("imu/orientation.x", 0.0);
+        set_state("imu/orientation.y", 0.0);
+        set_state("imu/orientation.z", 0.0);
+        set_state("imu/orientation.w", 0.0);
+        set_state("imu/angular_velocity.x", 0.0);
+        set_state("imu/angular_velocity.y", 0.0);
+        set_state("imu/angular_velocity.z", 0.0);
+        set_state("imu/linear_acceleration.x", 0.0);
+        set_state("imu/linear_acceleration.y", 0.0);
+        set_state("imu/linear_acceleration.z", 0.0);
+
+        return hardware_interface::CallbackReturn::SUCCESS;
     }
-  }
 
-  state_sub_.reset();
-  cmd_pub_.reset();
-  node_.reset();
-
-  RCLCPP_INFO(rclcpp::get_logger("ZyronInterface"), "Hardware interface stopped");
-  return CallbackReturn::SUCCESS;
-}
-
-hardware_interface::return_type ZyronInterface::read(
-  const rclcpp::Time &, const rclcpp::Duration &)
-{
-  std::lock_guard<std::mutex> lock(state_mutex_);
-  // States are kept up-to-date by joint_state_callback; nothing extra needed.
-  return hardware_interface::return_type::OK;
-}
-
-hardware_interface::return_type ZyronInterface::write(
-  const rclcpp::Time &, const rclcpp::Duration &)
-{
-  if (!cmd_pub_)
-  {
-    return hardware_interface::return_type::OK;
-  }
-
-  std_msgs::msg::Float64MultiArray msg;
-  msg.data = velocity_commands_;  // [left, right]
-
-  cmd_pub_->publish(msg);
-  return hardware_interface::return_type::OK;
-}
-
-void ZyronInterface::joint_state_callback(
-  const sensor_msgs::msg::JointState::SharedPtr msg)
-{
-  std::lock_guard<std::mutex> lock(state_mutex_);
-
-  for (size_t i = 0; i < info_.joints.size(); i++)
-  {
-    for (size_t j = 0; j < msg->name.size(); j++)
+    hardware_interface::CallbackReturn ZyronInterface::on_deactivate(const rclcpp_lifecycle::State &previous_state)
     {
-      if (msg->name[j] == info_.joints[i].name)
-      {
-        if (j < msg->position.size()) { position_states_[i] = msg->position[j]; }
-        if (j < msg->velocity.size()) { velocity_states_[i] = msg->velocity[j]; }
-        break;
-      }
-    }
-  }
-}
+        (void)previous_state;
 
-}  // namespace zyron_control
+        // Send zero velocity to stop the motors before shutting down
+        std::string stop_frame = driver_->buildRpsFrame(0, 0);
+        driver_->sendSerialFrame(stop_frame);
+
+        return hardware_interface::CallbackReturn::SUCCESS;
+    }
+
+    hardware_interface::CallbackReturn ZyronInterface::on_cleanup(const rclcpp_lifecycle::State &previous_state)
+    {
+        (void)previous_state;
+
+        // Release the serial driver and close the port
+        driver_.reset();
+
+        return hardware_interface::CallbackReturn::SUCCESS;
+    }
+
+    hardware_interface::CallbackReturn ZyronInterface::on_shutdown(const rclcpp_lifecycle::State &previous_state)
+    {
+        (void)previous_state;
+
+        // Safety net: stop motors and release driver on abrupt shutdown
+        if (driver_)
+        {
+            std::string stop_frame = driver_->buildRpsFrame(0, 0);
+            driver_->sendSerialFrame(stop_frame);
+            driver_.reset();
+        }
+
+        return hardware_interface::CallbackReturn::SUCCESS;
+    }
+
+    hardware_interface::return_type ZyronInterface::read(const rclcpp::Time &time, const rclcpp::Duration &period)
+    {
+        (void)time;
+        std::string serial_msg = driver_->readSerialData();
+
+        // No new data from MCU this cycle — keep last good state, don't overwrite with zeros.
+        // This is expected: MCU sends at 20Hz but read() is called at 100Hz.
+        if (serial_msg.empty())
+        {
+            // Still integrate wheel positions using last known velocity
+            set_state("wheel_left_joint/position",
+                get_state("wheel_left_joint/position") + get_state("wheel_left_joint/velocity") * period.seconds());
+            set_state("wheel_right_joint/position",
+                get_state("wheel_right_joint/position") + get_state("wheel_right_joint/velocity") * period.seconds());
+            return hardware_interface::return_type::OK;
+        }
+
+        std::array<double, 8> parsed_serial_msg = driver_->getParsedSerialMsg(serial_msg);
+        double left_vel = parsed_serial_msg[1];
+        double right_vel = parsed_serial_msg[0];
+        if (abs(left_vel) < 0.03)
+        {
+            left_vel = 0.0;
+        }
+        if (abs(right_vel) < 0.03)
+        {
+            right_vel = 0.0;
+        }
+        set_state("wheel_left_joint/velocity", left_vel);
+        set_state("wheel_right_joint/velocity", right_vel);
+        set_state("wheel_left_joint/position", get_state("wheel_left_joint/position") + left_vel * period.seconds());
+        set_state("wheel_right_joint/position", get_state("wheel_right_joint/position") + right_vel * period.seconds());
+
+        // Convert Euler (roll, pitch, yaw) from firmware to quaternion
+        tf2::Quaternion q;
+        q.setRPY(parsed_serial_msg[2],   // roll
+                 parsed_serial_msg[3],   // pitch
+                 parsed_serial_msg[4]);  // yaw
+        q.normalize();
+
+        set_state("imu/orientation.x", q.x());
+        set_state("imu/orientation.y", q.y());
+        set_state("imu/orientation.z", q.z());
+        set_state("imu/orientation.w", q.w());
+        set_state("imu/linear_acceleration.x", parsed_serial_msg[5]);
+        set_state("imu/linear_acceleration.y", parsed_serial_msg[6]);
+        set_state("imu/linear_acceleration.z", parsed_serial_msg[7]);
+
+        return hardware_interface::return_type::OK;
+    }
+
+    hardware_interface::return_type ZyronInterface::write(const rclcpp::Time &time, const rclcpp::Duration &period)
+    {
+        (void)time;
+        (void)period;
+
+        std::string motors_cmd_frame = driver_->buildRpsFrame(
+            get_command("wheel_right_joint/velocity"),
+            get_command("wheel_left_joint/velocity"));
+
+        driver_->sendSerialFrame(motors_cmd_frame);
+
+        return hardware_interface::return_type::OK;
+    }
+
+} // namespace zyron_control
 
 PLUGINLIB_EXPORT_CLASS(zyron_control::ZyronInterface, hardware_interface::SystemInterface)

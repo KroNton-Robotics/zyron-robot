@@ -3,7 +3,7 @@
 <package format="3">
   <name>zyron_control</name>
   <version>0.0.0</version>
-  <description>Zyron ros2_control hardware interface plugin — communicates via ROS2 topics</description>
+  <description>Zyron ros2_control hardware interface with an embedded serial driver</description>
   <maintainer email="user@example.com">user</maintainer>
   <license>Apache 2.0</license>
 
@@ -13,13 +13,19 @@
   <depend>rclcpp_lifecycle</depend>
   <depend>hardware_interface</depend>
   <depend>pluginlib</depend>
-  <depend>sensor_msgs</depend>
-  <depend>std_msgs</depend>
+  <depend>realtime_tools</depend>
+  <depend>tf2</depend>
+  <depend>libserial-dev</depend>
 
-  <exec_depend>zyron_firmware</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>diff_drive_controller</exec_depend>
+  <exec_depend>imu_sensor_broadcaster</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>robot_localization</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

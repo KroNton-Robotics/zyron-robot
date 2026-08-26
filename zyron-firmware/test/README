@@ -9,3 +9,15 @@ in the development cycle.
 
 More information about PlatformIO Unit Testing:
 - https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+
+The control logic test is hardware-independent and can be run on the host:
+
+  g++ -std=c++17 -Wall -Wextra -Wpedantic -Iinclude \
+    test/test_control_logic.cpp -o /tmp/zyron_control_logic_test
+  /tmp/zyron_control_logic_test
+
+The binary codec test is also hardware-independent:
+
+  g++ -std=c++17 -Wall -Wextra -Wpedantic -I../zyron_protocol/include \
+    test/test_binary_protocol.cpp -o /tmp/zyron_binary_protocol_test
+  /tmp/zyron_binary_protocol_test
