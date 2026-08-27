@@ -8,7 +8,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    package_share = get_package_share_directory('robot_perception')
+    package_share = get_package_share_directory('zyron_perception')
     parameters_file = os.path.join(
         package_share, 'config', 'rplidar_a1.yaml'
     )
