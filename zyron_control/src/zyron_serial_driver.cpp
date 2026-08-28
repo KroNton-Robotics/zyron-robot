@@ -102,31 +102,59 @@ namespace zyron_control
 
   std::string ZyronSerialDriver::readSerialData()
   {
-    if (!mcu_.IsOpen()) return ""; // Fixed return
+    if (!mcu_.IsOpen()) return "";
 
-    std::string latest_response = "";
-
-    // Read ALL available lines to clear the buffer, but only keep the newest one
-    while (mcu_.IsDataAvailable()) 
+    // Take one bounded snapshot of the kernel buffer.  Do not loop on
+    // IsDataAvailable(): the MCU can refill the buffer while it is being drained,
+    // which used to keep ros2_control's real-time read() callback busy for tens of
+    // milliseconds.
+    constexpr int kMaxBytesPerCycle = 1024;
+    const int available = mcu_.GetNumberOfBytesAvailable();
+    if (available > 0)
     {
-      std::string response;
-      try {
-        mcu_.ReadLine(response, '\n', 5);
-        if (!response.empty()) {
-           latest_response = response; 
-        }
-      } 
-      catch (const LibSerial::ReadTimeout&) {
-        break; // Timeout, stop reading
+      std::string bytes;
+      const auto bytes_to_read = static_cast<std::size_t>(
+        std::min(available, kMaxBytesPerCycle));
+      try
+      {
+        // A small, finite timeout protects against a race in which the number of
+        // available bytes changes between the query and the read.
+        mcu_.Read(bytes, bytes_to_read, 1);
       }
-      catch (const std::exception& e) {
+      catch (const LibSerial::ReadTimeout&)
+      {
+        // LibSerial preserves any bytes received before the timeout.
+      }
+      catch (const std::exception& e)
+      {
         std::cout << "Serial read error: " << e.what() << std::endl;
-        break;
+        return "";
       }
+      receive_buffer_.append(bytes);
     }
-    
-    // Will return empty string if no valid data was found, otherwise the newest line
-    return latest_response; 
+
+    // Return the newest complete frame and retain a partial trailing frame for
+    // the next control cycle.
+    const auto last_newline = receive_buffer_.rfind('\n');
+    if (last_newline == std::string::npos)
+    {
+      // Prevent an unplugged/noisy device from growing this buffer forever.
+      constexpr std::size_t kMaxPartialFrameSize = 4096;
+      if (receive_buffer_.size() > kMaxPartialFrameSize)
+      {
+        receive_buffer_.erase(0, receive_buffer_.size() - kMaxPartialFrameSize);
+      }
+      return "";
+    }
+
+    const auto previous_newline =
+      last_newline == 0 ? std::string::npos : receive_buffer_.rfind('\n', last_newline - 1);
+    const auto frame_start =
+      previous_newline == std::string::npos ? 0 : previous_newline + 1;
+    std::string latest_response = receive_buffer_.substr(
+      frame_start, last_newline - frame_start);
+    receive_buffer_.erase(0, last_newline + 1);
+    return latest_response;
   }
 
 
