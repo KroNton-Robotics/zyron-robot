@@ -35,8 +35,7 @@ ament_target_dependencies(
   tf2
 )
 
-# LibSerial is a plain system library (libserial-dev), not an ament package
-target_link_libraries(${PROJECT_NAME} serial)
+
 
 # Register pluginlib plugin
 pluginlib_export_plugin_description_file(hardware_interface zyron_interface.xml)

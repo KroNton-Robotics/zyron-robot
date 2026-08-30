@@ -1,7 +1,7 @@
 #ifndef ZYRON_CONTROL__ZYRON_SERIAL_DRIVER_HPP_
 #define ZYRON_CONTROL__ZYRON_SERIAL_DRIVER_HPP_
 
-#include <libserial/SerialPort.h>
+#include <array>
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -26,7 +26,8 @@ namespace zyron_control
 
   private:
     std::string port_;
-    LibSerial::SerialPort mcu_;
+    std::string receive_buffer_;
+    int serial_fd_;
   };
 
 } // namespace zyron_control

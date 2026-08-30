@@ -4,37 +4,86 @@
 #include <iomanip>
 #include <cmath>
 #include <array>
+#include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
 
 namespace zyron_control
 {
 
-  ZyronSerialDriver::ZyronSerialDriver(std::string device_name) : port_(device_name)
+  ZyronSerialDriver::ZyronSerialDriver(std::string device_name) : port_(device_name), serial_fd_(-1)
   {
   }
 
   ZyronSerialDriver::~ZyronSerialDriver()
   {
-    if (mcu_.IsOpen())
+    if (serial_fd_ >= 0)
     {
-      mcu_.Close();
+      ::close(serial_fd_);
+      serial_fd_ = -1;
     }
   }
 
   int ZyronSerialDriver::init()
   {
     std::cout << "Initializing connection with robot." << std::endl;
-    try
+    serial_fd_ = ::open(port_.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
+    
+    if (serial_fd_ < 0)
     {
-      mcu_.Open(port_);
-      mcu_.SetBaudRate(LibSerial::BaudRate::BAUD_115200);
-      std::cout << "Succeeded to open the port!" << std::endl;
-      return 0; // Added return
+      std::cout << "Failed to open the port: " << port_ << std::endl;
+      return -1;
     }
-    catch (const LibSerial::OpenFailed &)
-    {
-      std::cout << "Failed to open the port!" << std::endl;
-      return -1; // Added return
+
+    struct termios tty;
+    if (tcgetattr(serial_fd_, &tty) != 0) {
+        std::cout << "Error from tcgetattr" << std::endl;
+        return -1;
     }
+
+    // Set Baud Rate
+    cfsetospeed(&tty, B115200);
+    cfsetispeed(&tty, B115200);
+
+    // 8-N-1
+    tty.c_cflag &= ~PARENB; // Clear parity bit, disabling parity
+    tty.c_cflag &= ~CSTOPB; // Clear stop field, only one stop bit used
+    tty.c_cflag &= ~CSIZE;  // Clear all bits that set the data size 
+    tty.c_cflag |= CS8;     // 8 bits per byte
+
+    // Disable hardware flow control
+    tty.c_cflag &= ~CRTSCTS; 
+
+    // Turn on READ & ignore ctrl lines
+    tty.c_cflag |= CREAD | CLOCAL; 
+
+    // Disable canonical mode, echo, and signals
+    tty.c_lflag &= ~ICANON;
+    tty.c_lflag &= ~ECHO;
+    tty.c_lflag &= ~ECHOE;
+    tty.c_lflag &= ~ECHONL;
+    tty.c_lflag &= ~ISIG;
+
+    // Disable software flow control
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+    // Disable special handling of bytes
+    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL);
+
+    // Disable special output handling
+    tty.c_oflag &= ~OPOST;
+    tty.c_oflag &= ~ONLCR;
+
+    // Set non-blocking read
+    tty.c_cc[VTIME] = 0;
+    tty.c_cc[VMIN] = 0;
+
+    if (tcsetattr(serial_fd_, TCSANOW, &tty) != 0) {
+        std::cout << "Error from tcsetattr" << std::endl;
+        return -1;
+    }
+
+    std::cout << "Succeeded to open the port!" << std::endl;
+    return 0;
   }
 
   std::string ZyronSerialDriver::buildRpsFrame(int right_vel, int left_vel)
@@ -46,17 +95,15 @@ namespace zyron_control
     std::string compensate_zeros_right = (std::abs(right_vel) < 10) ? "0" : "";
     std::string compensate_zeros_left = (std::abs(left_vel) < 10) ? "0" : "";
 
-    // Removed std::fixed and setprecision(2) since we are dealing with integers
     message_stream << "r" << right_wheel_sign << compensate_zeros_right << std::abs(right_vel)
-                   << ",l" << left_wheel_sign << compensate_zeros_left << std::abs(left_vel) << ",\n"; // Added \n just in case MCU needs it
+                   << ",l" << left_wheel_sign << compensate_zeros_left << std::abs(left_vel) << ",\n";
 
     return message_stream.str();
   }
 
-  // Changed to std::array to avoid dynamic memory allocation in the RT loop
   std::array<double, 8> ZyronSerialDriver::getParsedSerialMsg(const std::string &line)
   {
-    std::array<double, 8> feedback_data = {0.0}; // Initialize all to 0.0
+    std::array<double, 8> feedback_data = {0.0};
     std::stringstream ss(line);
     std::string chunk;
 
@@ -80,7 +127,7 @@ namespace zyron_control
         else if (chunk.find("az") == 0) az = std::stod(chunk.substr(2));
         else if (chunk.find("y") == 0) yaw = std::stod(chunk.substr(1));
         else if (chunk.find("p") == 0) pitch = std::stod(chunk.substr(1));
-        else if (chunk.find("r") == 0) roll = std::stod(chunk.substr(1)); // Safe because rp/rn are checked first
+        else if (chunk.find("r") == 0) roll = std::stod(chunk.substr(1));
       }
       catch (const std::exception &e)
       {
@@ -102,46 +149,46 @@ namespace zyron_control
 
   std::string ZyronSerialDriver::readSerialData()
   {
-    if (!mcu_.IsOpen()) return ""; // Fixed return
+    if (serial_fd_ < 0) return "";
 
-    std::string latest_response = "";
-
-    // Read ALL available lines to clear the buffer, but only keep the newest one
-    while (mcu_.IsDataAvailable()) 
+    char buffer[1024];
+    ssize_t bytes_read = ::read(serial_fd_, buffer, sizeof(buffer));
+    if (bytes_read > 0)
     {
-      std::string response;
-      try {
-        mcu_.ReadLine(response, '\n', 5);
-        if (!response.empty()) {
-           latest_response = response; 
-        }
-      } 
-      catch (const LibSerial::ReadTimeout&) {
-        break; // Timeout, stop reading
-      }
-      catch (const std::exception& e) {
-        std::cout << "Serial read error: " << e.what() << std::endl;
-        break;
-      }
+      receive_buffer_.append(buffer, bytes_read);
     }
-    
-    // Will return empty string if no valid data was found, otherwise the newest line
-    return latest_response; 
-  }
 
+    const auto last_newline = receive_buffer_.rfind('\n');
+    if (last_newline == std::string::npos)
+    {
+      constexpr std::size_t kMaxPartialFrameSize = 4096;
+      if (receive_buffer_.size() > kMaxPartialFrameSize)
+      {
+        receive_buffer_.erase(0, receive_buffer_.size() - kMaxPartialFrameSize);
+      }
+      return "";
+    }
+
+    const auto previous_newline =
+      last_newline == 0 ? std::string::npos : receive_buffer_.rfind('\n', last_newline - 1);
+    const auto frame_start =
+      previous_newline == std::string::npos ? 0 : previous_newline + 1;
+    std::string latest_response = receive_buffer_.substr(
+      frame_start, last_newline - frame_start);
+    receive_buffer_.erase(0, last_newline + 1);
+    
+    return latest_response;
+  }
 
   void ZyronSerialDriver::sendSerialFrame(const std::string &frame)
   {
-    try
+    if (serial_fd_ >= 0)
     {
-      if (mcu_.IsOpen())
+      ssize_t bytes_written = ::write(serial_fd_, frame.c_str(), frame.size());
+      if (bytes_written < 0)
       {
-        mcu_.Write(frame);
+        std::cout << "Failed to write to serial port." << std::endl;
       }
-    }
-    catch (const std::exception& e) // Catch standard exceptions rather than (...)
-    {
-      std::cout << "Failed to send message to port: " << e.what() << std::endl;
     }
   }
 } // namespace zyron_control
