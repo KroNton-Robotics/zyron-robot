@@ -84,7 +84,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "serial_port",
-                default_value="/dev/ttyUSB0",
+                default_value="/dev/mcu",
                 description="Serial port connected to the Zyron ESP32",
             ),
             robot_state_publisher,
