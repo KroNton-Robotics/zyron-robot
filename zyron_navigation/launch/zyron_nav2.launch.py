@@ -2,9 +2,13 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 import os
 from ament_index_python.packages import get_package_share_directory
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 
 def generate_launch_description():
+
+    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
 
     # Paths to configuration files
     planner_yaml = os.path.join(get_package_share_directory('zyron_navigation'), 'config', 'zyron_planner_server.yaml')
@@ -12,7 +16,7 @@ def generate_launch_description():
     controller_yaml = os.path.join(get_package_share_directory('zyron_navigation'), 'config', 'zyron_controller.yaml')
     bt_xml_path = os.path.join(  get_package_share_directory('zyron_navigation'), 
                                'behavior_trees', 'nav_to_pose_w_replanning_and_recovery.xml')
-    use_sim_time=True
+
 
     # Planner Server Node
     planner_node = Node(
@@ -68,7 +72,12 @@ def generate_launch_description():
     
 
 
-    return LaunchDescription([   
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            'use_sim_time',
+            default_value='false',
+            description='Use simulation clock (true for Gazebo, false for real hardware)'
+        ),
         planner_node,
         controller_node,
         bt_node,
