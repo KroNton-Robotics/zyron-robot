@@ -78,50 +78,38 @@ void setup()
   Serial.setTimeout(10);
   setupIMU();
   motorsSetup();
-  set_motor_specs(280, 255);
+  set_motor_specs(80, 255);
   last_serial_time = millis();  // Initialize watchdog so motors don't false-trigger on boot
 }
 
 void loop()
 {
-  // Read all available chunks separated by commas
-  while (Serial.available())
+// Non-blocking serial parser — replaces lines 88-124
+static char cmd_buf[64];
+static uint8_t cmd_idx = 0;
+while (Serial.available() > 0)
+{
+  char c = Serial.read();
+  if (c == ',' || c == '\n' || c == '\r')
   {
-    // If ROS sends: "rp150.00,ln050.00,"
-    // 1st loop reads: "rp150.00"
-    // 2nd loop reads: "ln050.00"
-    String chunk = Serial.readStringUntil(',');
-    chunk.trim(); // Remove any accidental spaces or hidden characters
-
-    // Make sure the chunk is long enough to be valid (e.g., "rp5.0")
-    if (chunk.length() >= 3)
+    if (cmd_idx >= 3)
     {
-      char motor = chunk.charAt(0); // 'r' or 'l'
-      char sign = chunk.charAt(1);  // 'p' or 'n'
-
-      // Extract the numbers after the prefix and convert to integer
-      double RPS_val = chunk.substring(2).toDouble();
-
-      // Apply the negative sign if moving backwards
-      if (sign == 'n')
-      {
-        RPS_val = -RPS_val;
-      }
-
-      // Assign to the correct motor
-      if (motor == 'r')
-      {
-        RM_RPS_output = RPS_val;
-      }
-      else if (motor == 'l')
-      {
-        LM_RPS_output = RPS_val;
-      }
-
-      // Update watchdog timestamp on valid command
+      cmd_buf[cmd_idx] = '\0';
+      char motor = cmd_buf[0];
+      char sign  = cmd_buf[1];
+      double RPS_val = atof(&cmd_buf[2]);
+      if (sign == 'n') RPS_val = -RPS_val;
+      if (motor == 'r') RM_RPS_output = RPS_val;
+      else if (motor == 'l') LM_RPS_output = RPS_val;
       last_serial_time = millis();
     }
+    cmd_idx = 0;
   }
+  else if (cmd_idx < sizeof(cmd_buf) - 1)
+  {
+    cmd_buf[cmd_idx++] = c;
+  }
+}
 
   // Watchdog: if no serial data received for 500ms, stop motors
   if (millis() - last_serial_time > 500)
@@ -306,11 +294,14 @@ int calculate_pwm(double target_rads)
 
   // For backward movement, the Cytron PWM_DIR mode needs the complement
   // so that low speed = low duty cycle (not inverted)
-  if (pwm < 0)
-  {
-    pwm = -(max_pwm - abs(pwm));
-  }
-
+if (pwm < 0)
+{
+  int mag = abs(pwm);
+  if (mag > max_pwm) mag = max_pwm;
+  
+  // Flips the scale so a tiny input becomes a high PWM output
+  pwm = -(max_pwm - mag);
+}
   return pwm;
 }
 
