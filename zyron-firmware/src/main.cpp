@@ -173,8 +173,13 @@ void setupIMU()
 
 void updateIMU()
 {
-  if (!dmpReady)
+  if (!dmpReady) return;
+  // Reset FIFO if it overflows to prevent stale data
+  if (mpu.getFIFOCount() >= 1024)
+  {
+    mpu.resetFIFO();
     return;
+  }
 
   // Read latest packet from FIFO
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer))
