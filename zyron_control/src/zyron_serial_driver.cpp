@@ -4,11 +4,14 @@
 #include <iomanip>
 #include <cmath>
 #include <array>
+#include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
 
 namespace zyron_control
 {
 
-  ZyronSerialDriver::ZyronSerialDriver(std::string device_name) : port_(device_name)
+  ZyronSerialDriver::ZyronSerialDriver(std::string device_name) : port_(device_name), serial_fd_(-1)
   {
   }
 
@@ -18,6 +21,7 @@ namespace zyron_control
     {
       serial_port_.Close();
     }
+    serial_fd_ = -1;
   }
 
   int ZyronSerialDriver::init()
@@ -26,6 +30,7 @@ namespace zyron_control
 
     try
     {
+      // Use libserial to open and configure the port
       serial_port_.Open(port_);
       serial_port_.SetBaudRate(LibSerial::BaudRate::BAUD_115200);
       serial_port_.SetCharacterSize(LibSerial::CharacterSize::CHAR_SIZE_8);
@@ -42,6 +47,25 @@ namespace zyron_control
     {
       std::cout << "Error configuring serial port: " << e.what() << std::endl;
       return -1;
+    }
+
+    // Get the underlying file descriptor for fast POSIX I/O
+    serial_fd_ = serial_port_.GetFileDescriptor();
+
+    // Set non-blocking mode on the fd
+    int flags = fcntl(serial_fd_, F_GETFL, 0);
+    fcntl(serial_fd_, F_SETFL, flags | O_NONBLOCK);
+
+    // Ensure raw mode with non-blocking reads (VMIN=0, VTIME=0)
+    struct termios tty;
+    if (tcgetattr(serial_fd_, &tty) == 0)
+    {
+      tty.c_cflag |= (CREAD | CLOCAL);   // Enable receiver, ignore modem control lines
+      tty.c_cflag &= ~CRTSCTS;           // Disable hardware flow control
+      tty.c_iflag &= ~(IXON | IXOFF | IXANY);  // Disable software flow control
+      tty.c_cc[VMIN] = 0;                // Non-blocking: return immediately
+      tty.c_cc[VTIME] = 0;               // No inter-byte timeout
+      tcsetattr(serial_fd_, TCSANOW, &tty);
     }
 
     std::cout << "Succeeded to open the port!" << std::endl;
@@ -111,20 +135,14 @@ namespace zyron_control
 
   std::string ZyronSerialDriver::readSerialData()
   {
-    if (!serial_port_.IsOpen()) return "";
+    if (serial_fd_ < 0) return "";
 
-    try
+    // Use raw POSIX read — non-blocking (O_NONBLOCK + VMIN=0)
+    char buffer[1024];
+    ssize_t bytes_read = ::read(serial_fd_, buffer, sizeof(buffer));
+    if (bytes_read > 0)
     {
-      while (serial_port_.IsDataAvailable())
-      {
-        char c;
-        serial_port_.ReadByte(c, 1);
-        receive_buffer_ += c;
-      }
-    }
-    catch (const std::runtime_error &e)
-    {
-      // Timeout or read error — proceed with whatever we have in the buffer
+      receive_buffer_.append(buffer, bytes_read);
     }
 
     const auto last_newline = receive_buffer_.rfind('\n');
@@ -151,15 +169,12 @@ namespace zyron_control
 
   void ZyronSerialDriver::sendSerialFrame(const std::string &frame)
   {
-    if (serial_port_.IsOpen())
+    if (serial_fd_ >= 0)
     {
-      try
+      ssize_t bytes_written = ::write(serial_fd_, frame.c_str(), frame.size());
+      if (bytes_written < 0)
       {
-        serial_port_.Write(frame);
-      }
-      catch (const std::runtime_error &e)
-      {
-        std::cout << "Failed to write to serial port: " << e.what() << std::endl;
+        std::cout << "Failed to write to serial port." << std::endl;
       }
     }
   }

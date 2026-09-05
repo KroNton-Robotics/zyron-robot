@@ -29,6 +29,7 @@ namespace zyron_control
     std::string port_;
     std::string receive_buffer_;
     LibSerial::SerialPort serial_port_;
+    int serial_fd_;  // cached fd for fast POSIX I/O after libserial config
   };
 
 } // namespace zyron_control
