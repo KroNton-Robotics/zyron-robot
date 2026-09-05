@@ -44,7 +44,7 @@ controller_server:
       min_angular_vel: -0.81
       max_linear_accel: 2.5
       max_linear_decel: -2.5
-      max_angular_accel: 3.2
+      max_angular_accel: 21.0
       max_angular_decel: -3.2
       lookahead_dist: 0.6
       min_lookahead_dist: 0.3
@@ -68,7 +68,7 @@ controller_server:
       allow_reversing: false
       rotate_to_heading_min_angle: 0.785
       min_distance_to_obstacle: 0.0
-      use_dynamic_window: false
+      use_dynamic_window: true
       allow_obstacle_checking_beyond_goal: false
 
 
