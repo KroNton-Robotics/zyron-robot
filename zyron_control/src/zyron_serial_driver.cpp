@@ -33,6 +33,10 @@ namespace zyron_control
       serial_port_.SetParity(LibSerial::Parity::PARITY_NONE);
       serial_port_.SetStopBits(LibSerial::StopBits::STOP_BITS_1);
       serial_port_.SetFlowControl(LibSerial::FlowControl::FLOW_CONTROL_NONE);
+
+      // Disable DTR and RTS to prevent the ESP32 from being held in reset
+      serial_port_.SetDTR(false);
+      serial_port_.SetRTS(false);
     }
     catch (const LibSerial::OpenFailed &e)
     {
