@@ -114,20 +114,21 @@ namespace zyron_control
   {
     if (!serial_port_.IsOpen()) return "";
 
-    try
+    // Use pure libserial to read available data
+    while (serial_port_.IsDataAvailable())
     {
-      // Use pure libserial to read available data
-      while (serial_port_.IsDataAvailable())
+      char c;
+      try
       {
-        char c;
-        // Using timeout of 1 to avoid indefinite blocking
-        serial_port_.ReadByte(c, 1);
+        // Increased timeout to 5ms for Raspberry Pi RP1 UART micro-stutters
+        serial_port_.ReadByte(c, 5);
         receive_buffer_ += c;
       }
-    }
-    catch (const std::runtime_error &e)
-    {
-      // Timeout or read error — proceed with whatever we have in the buffer
+      catch (const std::runtime_error &e)
+      {
+        // Timeout on this specific byte — break the loop but keep the buffer intact
+        break;
+      }
     }
 
     const auto last_newline = receive_buffer_.rfind('\n');
