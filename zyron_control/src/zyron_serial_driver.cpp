@@ -52,21 +52,59 @@ namespace zyron_control
     // Get the underlying file descriptor for fast POSIX I/O
     serial_fd_ = serial_port_.GetFileDescriptor();
 
+    // Apply the full termios configuration (identical to original POSIX setup)
+    struct termios tty;
+    if (tcgetattr(serial_fd_, &tty) != 0)
+    {
+      std::cout << "Error from tcgetattr" << std::endl;
+      return -1;
+    }
+
+    // Set Baud Rate
+    cfsetospeed(&tty, B115200);
+    cfsetispeed(&tty, B115200);
+
+    // 8-N-1
+    tty.c_cflag &= ~PARENB;
+    tty.c_cflag &= ~CSTOPB;
+    tty.c_cflag &= ~CSIZE;
+    tty.c_cflag |= CS8;
+
+    // Disable hardware flow control
+    tty.c_cflag &= ~CRTSCTS;
+
+    // Turn on READ & ignore ctrl lines
+    tty.c_cflag |= CREAD | CLOCAL;
+
+    // Disable canonical mode, echo, and signals
+    tty.c_lflag &= ~ICANON;
+    tty.c_lflag &= ~ECHO;
+    tty.c_lflag &= ~ECHOE;
+    tty.c_lflag &= ~ECHONL;
+    tty.c_lflag &= ~ISIG;
+
+    // Disable software flow control
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+    // Disable special handling of bytes
+    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL);
+
+    // Disable special output handling
+    tty.c_oflag &= ~OPOST;
+    tty.c_oflag &= ~ONLCR;
+
+    // Set non-blocking read
+    tty.c_cc[VTIME] = 0;
+    tty.c_cc[VMIN] = 0;
+
+    if (tcsetattr(serial_fd_, TCSANOW, &tty) != 0)
+    {
+      std::cout << "Error from tcsetattr" << std::endl;
+      return -1;
+    }
+
     // Set non-blocking mode on the fd
     int flags = fcntl(serial_fd_, F_GETFL, 0);
     fcntl(serial_fd_, F_SETFL, flags | O_NONBLOCK);
-
-    // Ensure raw mode with non-blocking reads (VMIN=0, VTIME=0)
-    struct termios tty;
-    if (tcgetattr(serial_fd_, &tty) == 0)
-    {
-      tty.c_cflag |= (CREAD | CLOCAL);   // Enable receiver, ignore modem control lines
-      tty.c_cflag &= ~CRTSCTS;           // Disable hardware flow control
-      tty.c_iflag &= ~(IXON | IXOFF | IXANY);  // Disable software flow control
-      tty.c_cc[VMIN] = 0;                // Non-blocking: return immediately
-      tty.c_cc[VTIME] = 0;               // No inter-byte timeout
-      tcsetattr(serial_fd_, TCSANOW, &tty);
-    }
 
     std::cout << "Succeeded to open the port!" << std::endl;
     return 0;
