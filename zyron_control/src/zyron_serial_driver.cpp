@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <cmath>
 #include <array>
+#include <termios.h>
 
 namespace zyron_control
 {
@@ -38,8 +39,20 @@ namespace zyron_control
       serial_port_.SetDTR(true);
       serial_port_.SetRTS(true);
       
-      // Flush out the ESP32 bootloader text (e.g. "ets Jul 29...") so it doesn't break the parser
+      // Flush out the ESP32 bootloader text
       serial_port_.FlushIOBuffers();
+
+      // --- RASPBERRY PI BUG FIX ---
+      // libserial fails to set CREAD and CLOCAL correctly on the Pi's UART driver.
+      // We must manually inject these flags, exactly like minicom does, otherwise
+      // the Pi refuses to read data because it thinks the "modem is disconnected".
+      int fd = serial_port_.GetFileDescriptor();
+      struct termios tty;
+      if (tcgetattr(fd, &tty) == 0)
+      {
+        tty.c_cflag |= (CREAD | CLOCAL);
+        tcsetattr(fd, TCSANOW, &tty);
+      }
     }
     catch (const LibSerial::OpenFailed &e)
     {
