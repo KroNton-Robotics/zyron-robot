@@ -7,6 +7,7 @@
 #include <sstream>
 #include <iomanip>
 #include <vector>
+#include <libserial/SerialPort.h>
 
 namespace zyron_control
 {
@@ -27,7 +28,7 @@ namespace zyron_control
   private:
     std::string port_;
     std::string receive_buffer_;
-    int serial_fd_;
+    LibSerial::SerialPort serial_port_;
   };
 
 } // namespace zyron_control
