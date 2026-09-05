@@ -1,6 +1,6 @@
 controller_manager:
   ros__parameters:
-    update_rate: 100  # Hz
+    update_rate: 20  # Hz
 
     hardware_components_initial_state:
       shutdown_on_initial_state_failure: false

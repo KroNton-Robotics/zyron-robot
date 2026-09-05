@@ -7,6 +7,7 @@
 #include <sstream>
 #include <iomanip>
 #include <vector>
+#include <libserial/SerialPort.h>
 
 namespace zyron_control
 {
@@ -22,12 +23,11 @@ namespace zyron_control
     std::array<double, 8> getParsedSerialMsg(const std::string& line);
     std::string readSerialData();
     void sendSerialFrame(const std::string &frame);
-    
 
   private:
     std::string port_;
     std::string receive_buffer_;
-    int serial_fd_;
+    LibSerial::SerialPort serial_port_;
   };
 
 } // namespace zyron_control

@@ -37,7 +37,7 @@ controller_server:
 
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.16              # Max linear speed
+      desired_linear_vel: 0.16              
       max_linear_vel: 0.16
       min_linear_vel: -0.16
       max_angular_vel: 0.81

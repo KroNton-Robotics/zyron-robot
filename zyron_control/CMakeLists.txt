@@ -14,6 +14,8 @@ find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(realtime_tools REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBSERIAL REQUIRED libserial)
 
 include_directories(include)
 
@@ -34,6 +36,9 @@ ament_target_dependencies(
   realtime_tools
   tf2
 )
+
+target_include_directories(${PROJECT_NAME} PRIVATE ${LIBSERIAL_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME} ${LIBSERIAL_LIBRARIES})
 
 
 
