@@ -1,12 +1,11 @@
 planner_server:
   ros__parameters:
     expected_planner_frequency: 10.0
-    use_sim_time: True
-    plugin_names: ["GridBased", "inflation_layer"]
-    plugin_types: ["nav2_smac_planner::SmacPlanner2D", "nav2_costmap_2d::InflationLayer"]
+    use_sim_time: False
+    plugins: ["GridBased"]
     
     GridBased:
-      plugin: "nav2_smac_planner::SmacPlanner2D" # In Iron and older versions, "/" was used instead of "::"
+      plugin: "nav2_smac_planner::SmacPlanner2D"
       tolerance: 0.125                      # tolerance for planning if unable to reach exact pose, in meters
       downsample_costmap: false             # whether or not to downsample the map
       downsampling_factor: 1                # multiplier for the resolution of the costmap layer (e.g. 2 on a 5cm costmap would be 10cm)
@@ -29,10 +28,11 @@ global_costmap:
       update_frequency: 1.0
       publish_frequency: 1.0
       global_frame: map
-      robot_base_frame: base_link
-      use_sim_time: True
-      robot_radius: 0.17
-      # footprint: '[[0.325, 0.325], [0.325, -0.325], [-0.325, -0.325], [-0.325, 0.325]]' # use this in case of robot is not circular
+      robot_base_frame: base_footprint
+      use_sim_time: False
+      # Footprint matches zyron_description: base_length=0.290m, base_width=0.210m
+      # Corners at ±(base_length/2) in x and ±(base_width/2) in y, with 5mm padding
+      footprint: '[[0.150, 0.110], [0.150, -0.110], [-0.150, -0.110], [-0.150, 0.110]]'
       resolution: 0.05
       track_unknown_space: true
       plugins: ["static_layer","obstacle_layer", "inflation_layer"]
@@ -43,8 +43,8 @@ global_costmap:
         
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.5 
-        inflation_radius: 1.0  #increase this value to make generated global path away from obstacles and walls
+        cost_scaling_factor: 3.5
+        inflation_radius: 0.35  # ~2x robot circumscribed radius (0.179m). Keeps clearance without blocking indoor corridors.
       always_send_full_costmap: True
 
       obstacle_layer:

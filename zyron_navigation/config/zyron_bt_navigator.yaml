@@ -1,8 +1,8 @@
 bt_navigator:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
     global_frame: map
-    robot_base_frame: base_link
+    robot_base_frame: base_footprint
     transform_tolerance: 0.1
     navigators: ['navigate_to_pose', 'navigate_through_poses']
     
