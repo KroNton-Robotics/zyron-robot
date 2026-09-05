@@ -118,7 +118,7 @@ namespace zyron_control
       while (serial_port_.IsDataAvailable())
       {
         char c;
-        serial_port_.ReadByte(c, 0);
+        serial_port_.ReadByte(c, 1);
         receive_buffer_ += c;
       }
     }
