@@ -156,7 +156,6 @@ namespace zyron_control
       try
       {
         serial_port_.Write(frame);
-        serial_port_.DrainWriteBuffer();
       }
       catch (const std::runtime_error &e)
       {
