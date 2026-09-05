@@ -126,9 +126,9 @@ while (Serial.available() > 0)
   motor_right.setSpeed(RM_pwm_output);
   updateIMU();
 
-  // SEND ENCODER FEEDBACK (Runs at 20Hz / every 50ms)
+  // SEND ENCODER FEEDBACK (Runs at 50Hz / every 20ms)
   unsigned long current_time = millis();
-  if (current_time - last_time >= 50)
+  if (current_time - last_time >= 20)
   {
     sendFeedback(current_time);
     last_time = current_time;
