@@ -42,15 +42,19 @@ namespace zyron_control
       // Flush out the ESP32 bootloader text
       serial_port_.FlushIOBuffers();
 
-      // --- RASPBERRY PI BUG FIX ---
-      // libserial fails to set CREAD and CLOCAL correctly on the Pi's UART driver.
-      // We must manually inject these flags, exactly like minicom does, otherwise
-      // the Pi refuses to read data because it thinks the "modem is disconnected".
+      // --- RASPBERRY PI 5 RP1 BUG FIX ---
+      // The Pi 5's RP1 USB driver ignores some of libserial's high-level configuration.
+      // minicom works because it forces the Linux kernel into "raw" mode using POSIX.
+      // We must apply the full raw configuration manually to bypass the libserial bug.
       int fd = serial_port_.GetFileDescriptor();
       struct termios tty;
       if (tcgetattr(fd, &tty) == 0)
       {
-        tty.c_cflag |= (CREAD | CLOCAL);
+        cfmakeraw(&tty); // Force raw mode (disables ECHO, ICANON, ISIG, etc.)
+        tty.c_cflag |= (CREAD | CLOCAL); // Enable receiver, ignore modem control lines
+        tty.c_cflag &= ~CRTSCTS;         // Disable hardware flow control
+        tty.c_cc[VMIN] = 0;              // Non-blocking read
+        tty.c_cc[VTIME] = 0;
         tcsetattr(fd, TCSANOW, &tty);
       }
     }
