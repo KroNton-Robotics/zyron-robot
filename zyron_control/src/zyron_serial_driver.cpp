@@ -4,7 +4,6 @@
 #include <iomanip>
 #include <cmath>
 #include <array>
-#include <termios.h>
 
 namespace zyron_control
 {
@@ -34,29 +33,6 @@ namespace zyron_control
       serial_port_.SetParity(LibSerial::Parity::PARITY_NONE);
       serial_port_.SetStopBits(LibSerial::StopBits::STOP_BITS_1);
       serial_port_.SetFlowControl(LibSerial::FlowControl::FLOW_CONTROL_NONE);
-
-      // Mimic minicom/pyserial default state to keep ESP32 running
-      serial_port_.SetDTR(true);
-      serial_port_.SetRTS(true);
-      
-      // Flush out the ESP32 bootloader text
-      serial_port_.FlushIOBuffers();
-
-      // --- RASPBERRY PI 5 RP1 BUG FIX ---
-      // The Pi 5's RP1 USB driver ignores some of libserial's high-level configuration.
-      // minicom works because it forces the Linux kernel into "raw" mode using POSIX.
-      // We must apply the full raw configuration manually to bypass the libserial bug.
-      int fd = serial_port_.GetFileDescriptor();
-      struct termios tty;
-      if (tcgetattr(fd, &tty) == 0)
-      {
-        cfmakeraw(&tty); // Force raw mode (disables ECHO, ICANON, ISIG, etc.)
-        tty.c_cflag |= (CREAD | CLOCAL); // Enable receiver, ignore modem control lines
-        tty.c_cflag &= ~CRTSCTS;         // Disable hardware flow control
-        tty.c_cc[VMIN] = 0;              // Non-blocking read
-        tty.c_cc[VTIME] = 0;
-        tcsetattr(fd, TCSANOW, &tty);
-      }
     }
     catch (const LibSerial::OpenFailed &e)
     {
