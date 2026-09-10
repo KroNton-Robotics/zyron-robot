@@ -59,7 +59,6 @@ float latest_az = 0.0;
 
 // Timing
 unsigned long last_time = 0;
-unsigned long last_serial_time = 0;  // Watchdog: tracks last serial reception
 
 // Function Prototypes
 void motorsSetup();
@@ -78,44 +77,45 @@ void setup()
   Serial.setTimeout(10);
   setupIMU();
   motorsSetup();
-  set_motor_specs(80, 255);
-  last_serial_time = millis();  // Initialize watchdog so motors don't false-trigger on boot
+  set_motor_specs(280, 255);
 }
 
 void loop()
 {
-// Non-blocking serial parser — replaces lines 88-124
-static char cmd_buf[64];
-static uint8_t cmd_idx = 0;
-while (Serial.available() > 0)
-{
-  char c = Serial.read();
-  if (c == ',' || c == '\n' || c == '\r')
+  // Read all available chunks separated by commas
+  while (Serial.available())
   {
-    if (cmd_idx >= 3)
-    {
-      cmd_buf[cmd_idx] = '\0';
-      char motor = cmd_buf[0];
-      char sign  = cmd_buf[1];
-      double RPS_val = atof(&cmd_buf[2]);
-      if (sign == 'n') RPS_val = -RPS_val;
-      if (motor == 'r') RM_RPS_output = RPS_val;
-      else if (motor == 'l') LM_RPS_output = RPS_val;
-      last_serial_time = millis();
-    }
-    cmd_idx = 0;
-  }
-  else if (cmd_idx < sizeof(cmd_buf) - 1)
-  {
-    cmd_buf[cmd_idx++] = c;
-  }
-}
+    // If ROS sends: "rp150.00,ln050.00,"
+    // 1st loop reads: "rp150.00"
+    // 2nd loop reads: "ln050.00"
+    String chunk = Serial.readStringUntil(',');
+    chunk.trim(); // Remove any accidental spaces or hidden characters
 
-  // Watchdog: if no serial data received for 500ms, stop motors
-  if (millis() - last_serial_time > 500)
-  {
-    RM_RPS_output = 0.0;
-    LM_RPS_output = 0.0;
+    // Make sure the chunk is long enough to be valid (e.g., "rp5.0")
+    if (chunk.length() >= 3)
+    {
+      char motor = chunk.charAt(0); // 'r' or 'l'
+      char sign = chunk.charAt(1);  // 'p' or 'n'
+
+      // Extract the numbers after the prefix and convert to integer
+      double RPS_val = chunk.substring(2).toDouble();
+
+      // Apply the negative sign if moving backwards
+      if (sign == 'n')
+      {
+        RPS_val = -RPS_val;
+      }
+
+      // Assign to the correct motor
+      if (motor == 'r')
+      {
+        RM_RPS_output = RPS_val;
+      }
+      else if (motor == 'l')
+      {
+        LM_RPS_output = RPS_val;
+      }
+    }
   }
 
   // Update motor speeds continually
@@ -126,9 +126,9 @@ while (Serial.available() > 0)
   motor_right.setSpeed(RM_pwm_output);
   updateIMU();
 
-  // SEND ENCODER FEEDBACK (Runs at 50Hz / every 20ms)
+  // SEND ENCODER FEEDBACK (Runs at 20Hz / every 50ms)
   unsigned long current_time = millis();
-  if (current_time - last_time >= 20)
+  if (current_time - last_time >= 50)
   {
     sendFeedback(current_time);
     last_time = current_time;
@@ -173,21 +173,15 @@ void setupIMU()
 
 void updateIMU()
 {
-  if (!dmpReady) return;
-  // Reset FIFO if it overflows to prevent stale data
-  if (mpu.getFIFOCount() >= 1024)
-  {
-    mpu.resetFIFO();
+  if (!dmpReady)
     return;
-  }
 
   // Read latest packet from FIFO
   if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer))
   {
-    // Get Orientation (gravity-referenced yaw/pitch/roll)
+    // Get Orientation
     mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetYawPitchRoll(euler, &q, &gravity);
+    mpu.dmpGetEuler(euler, &q);
 
     latest_yaw = euler[0];
     latest_pitch = euler[1];
@@ -195,6 +189,7 @@ void updateIMU()
 
     // Get Acceleration
     mpu.dmpGetAccel(&aa, fifoBuffer);
+    mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
 
     latest_ax = aaReal.x / 10.0;
@@ -296,18 +291,8 @@ int calculate_pwm(double target_rads)
 {
   // Use the pre-calculated multiplier to save CPU cycles
   int pwm = target_rads * pwm_multiplier;
-
-  // For backward movement, the Cytron PWM_DIR mode needs the complement
-  // so that low speed = low duty cycle (not inverted)
-if (pwm < 0)
-{
-  int mag = abs(pwm);
-  if (mag > max_pwm) mag = max_pwm;
-  
-  // Flips the scale so a tiny input becomes a high PWM output
-  pwm = -(max_pwm - mag);
-}
   return pwm;
+
 }
 
 void IRAM_ATTR leftEncoderISR()
