@@ -2,7 +2,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess, RegisterEventHandler
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
@@ -36,6 +37,12 @@ def generate_launch_description():
         parameters=[{"robot_description": robot_description}],
     )
 
+    # Force the Pi 5's USB driver into raw mode before starting ROS nodes
+    configure_serial_port = ExecuteProcess(
+        cmd=['stty', '-F', serial_port, '115200', 'raw', '-echo', '-hupcl', 'clocal', 'cread'],
+        output='screen'
+    )
+
     controller_manager = Node(
         package="controller_manager",
         executable="ros2_control_node",
@@ -47,6 +54,14 @@ def generate_launch_description():
             {"robot_description": robot_description, "use_sim_time": False},
             os.path.join(robot_control_pkg, "config", "zyron_controllers.yaml"),
         ],
+    )
+
+    # Delay starting the controller_manager until stty has successfully configured the port
+    delayed_controller_manager = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=configure_serial_port,
+            on_exit=[controller_manager],
+        )
     )
 
     joint_state_broadcaster_spawner = Node(
@@ -88,7 +103,8 @@ def generate_launch_description():
                 description="Serial port connected to the Zyron ESP32",
             ),
             robot_state_publisher,
-            controller_manager,
+            configure_serial_port,
+            delayed_controller_manager,
             joint_state_broadcaster_spawner,
             imu_broadcaster_spawner,
             zyron_controller_spawner,
