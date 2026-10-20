@@ -19,6 +19,7 @@ jobs:
         with:
           path: src/zyron-robot
       - name: Build and test
+        shell: bash
         run: |
           source /opt/ros/jazzy/setup.bash
           colcon build --packages-select zyron_control --cmake-args -DBUILD_TESTING=ON
