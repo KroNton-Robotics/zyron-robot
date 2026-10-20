@@ -1,0 +1,26 @@
+name: zyron_control tests
+
+on:
+  push:
+    branches: [driver-v2]
+  pull_request:
+    branches: [driver-v2]
+
+jobs:
+  gtest:
+    runs-on: ubuntu-24.04
+    container: ros:jazzy-ros-base
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y libserial-dev python3-colcon-common-extensions
+      - uses: actions/checkout@v4
+        with:
+          path: src/zyron-robot
+      - name: Build and test
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          colcon build --packages-select zyron_control --cmake-args -DBUILD_TESTING=ON
+          colcon test --packages-select zyron_control --event-handlers console_direct+
+          colcon test-result --verbose
