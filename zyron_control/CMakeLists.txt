@@ -41,6 +41,15 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${LIBSERIAL_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} ${LIBSERIAL_LIBRARIES})
 
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(${PROJECT_NAME}_test_zyron_serial_driver test/test_zyron_serial_driver.cpp)
+  target_include_directories(${PROJECT_NAME}_test_zyron_serial_driver PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+  )
+  target_link_libraries(${PROJECT_NAME}_test_zyron_serial_driver ${PROJECT_NAME})
+endif()
 
 # Register pluginlib plugin
 pluginlib_export_plugin_description_file(hardware_interface zyron_interface.xml)
